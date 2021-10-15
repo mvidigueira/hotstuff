@@ -88,11 +88,13 @@ impl Mempool {
         // Build and run the payload maker.
         let payload_maker = PayloadMaker::new(
             name,
-            signature_service,
+            committee.clone(),
+            signature_service.clone(),
             parameters.max_payload_size,
             parameters.min_block_delay,
             rx_client,
             tx_core,
+            tx_network.clone(),
         );
 
         // Run the core.
@@ -100,6 +102,7 @@ impl Mempool {
             name,
             committee,
             parameters,
+            signature_service,
             store,
             synchronizer,
             payload_maker,

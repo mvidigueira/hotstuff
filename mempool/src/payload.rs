@@ -1,6 +1,9 @@
+use crate::config::Committee;
 use crate::core::MempoolMessage;
 use crate::messages::{Payload, Transaction};
+use crate::synchronizer::Synchronizer;
 use crypto::{PublicKey, SignatureService};
+use network::NetMessage;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::time::{sleep, Duration};
@@ -11,21 +14,25 @@ struct Runner {
     max_size: usize,
     min_block_delay: u64,
     name: PublicKey,
+    committee: Committee,
     signature_service: SignatureService,
     client_channel: Receiver<Transaction>,
     core_channel: Sender<MempoolMessage>,
     request_channel: Receiver<oneshot::Sender<Payload>>,
+    network_channel: Sender<NetMessage>,
 }
 
 impl Runner {
     fn new(
         name: PublicKey,
+        committee: Committee,
         signature_service: SignatureService,
         max_size: usize,
         min_block_delay: u64,
         client_channel: Receiver<Transaction>,
         core_channel: Sender<MempoolMessage>,
         request_channel: Receiver<oneshot::Sender<Payload>>,
+        network_channel: Sender<NetMessage>,
     ) -> Self {
         Self {
             transactions: Vec::with_capacity(max_size),
@@ -33,10 +40,12 @@ impl Runner {
             max_size,
             min_block_delay,
             name,
+            committee,
             signature_service,
             client_channel,
             core_channel,
             request_channel,
+            network_channel,
         }
     }
 
@@ -67,7 +76,28 @@ impl Runner {
             tokio::select! {
                 Some(transaction) = self.client_channel.recv() => {
                     if let Some(payload) = self.add(transaction).await {
-                        let message = MempoolMessage::OwnPayload(payload);
+
+                        let (chunks, root) = payload.encode_and_commit(
+                            self.name, &self.committee, &mut self.signature_service
+                        ).await;
+                        for (_i, chunk) in chunks.into_iter().enumerate() {
+
+                            /*
+                            let message = MempoolMessage::Chunk(chunk);
+                            let to = self.committee.name(i);
+                            Synchronizer::transmit(
+                                &message,
+                                &self.name,
+                                to.as_ref(),
+                                &self.committee,
+                                &self.network_channel,
+                            )
+                            .await.expect("Failed to transmit coded payload");
+                            */
+                        }
+
+
+                        let message = MempoolMessage::OwnPayload(payload, root);
                         if let Err(e) = self.core_channel.send(message).await {
                             panic!("Failed to send payload to the core: {}", e);
                         }
@@ -92,22 +122,26 @@ pub struct PayloadMaker {
 impl PayloadMaker {
     pub fn new(
         name: PublicKey,
+        committee: Committee,
         signature_service: SignatureService,
         max_size: usize,
         min_block_delay: u64,
         client_channel: Receiver<Transaction>,
         core_channel: Sender<MempoolMessage>,
+        network_channel: Sender<NetMessage>,
     ) -> Self {
         let (tx_request, rx_request) = channel(1000);
         tokio::spawn(async move {
             Runner::new(
                 name,
+                committee,
                 signature_service,
                 max_size,
                 min_block_delay,
                 client_channel,
                 core_channel,
                 rx_request,
+                network_channel,
             )
             .run()
             .await;

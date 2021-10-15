@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
+pub type Stake = u32;
+
 #[derive(Serialize, Deserialize)]
 pub struct Parameters {
     pub queue_capacity: usize,
@@ -53,6 +55,31 @@ impl Committee {
                 })
                 .collect(),
             epoch,
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.authorities.len()
+    }
+
+    pub fn quorum_threshold(&self) -> Stake {
+        // TODO
+        0
+    }
+
+    pub fn index(&self, name: &PublicKey) -> Option<usize> {
+        let mut keys: Vec<_> = self.authorities.keys().cloned().collect();
+        keys.sort();
+        keys.iter().position(|x| x == name)
+    }
+
+    pub fn name(&self, index: usize) -> Option<PublicKey> {
+        let mut keys: Vec<_> = self.authorities.keys().cloned().collect();
+        keys.sort();
+        if index < self.size() {
+            Some(keys[index].clone())
+        } else {
+            None
         }
     }
 

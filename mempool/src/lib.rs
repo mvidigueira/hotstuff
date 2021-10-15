@@ -1,5 +1,6 @@
 #[macro_use]
 mod error;
+mod aggregator;
 mod config;
 mod core;
 mod front;

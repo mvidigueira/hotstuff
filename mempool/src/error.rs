@@ -42,4 +42,13 @@ pub enum MempoolError {
 
     #[error("Node {0:?} is not in the committee")]
     NotInCommittee(PublicKey),
+
+    #[error("Inclusion proof failed")]
+    BadInclusionProof,
+
+    #[error("Received more than one vote from {0}")]
+    AuthorityReuse(PublicKey),
+
+    #[error("Received unexpected chunk Ack from {0}")]
+    UnexpectedAck(PublicKey),
 }

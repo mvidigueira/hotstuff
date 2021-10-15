@@ -1,17 +1,18 @@
+use crate::aggregator::Aggregator;
 use crate::config::{Committee, Parameters};
 use crate::error::{MempoolError, MempoolResult};
-use crate::messages::Payload;
+use crate::messages::{CodedPayload, Payload};
 use crate::payload::PayloadMaker;
 use crate::synchronizer::Synchronizer;
 use consensus::{Block, ConsensusMempoolMessage, PayloadStatus, RoundNumber};
 use crypto::Hash as _;
-use crypto::{Digest, PublicKey};
+use crypto::{Digest, PublicKey, Signature, SignatureService};
 #[cfg(feature = "benchmark")]
 use log::info;
 use log::{error, warn};
 use network::NetMessage;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use store::Store;
@@ -23,15 +24,19 @@ pub mod core_tests;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum MempoolMessage {
-    OwnPayload(Payload),
+    OwnPayload(Payload, /* Merkle root */ Digest),
     Payload(Payload),
     PayloadRequest(Vec<Digest>, PublicKey),
+    //Chunk(CodedPayload)
+    Chunk(Vec<u8>),
+    ChunkAck(/* root */ Digest, Signature, PublicKey),
 }
 
 pub struct Core {
     name: PublicKey,
     committee: Committee,
     parameters: Parameters,
+    signature_service: SignatureService,
     store: Store,
     synchronizer: Synchronizer,
     payload_maker: PayloadMaker,
@@ -39,6 +44,7 @@ pub struct Core {
     consensus_channel: Receiver<ConsensusMempoolMessage>,
     network_channel: Sender<NetMessage>,
     queue: HashSet<Digest>,
+    pending: HashMap<Digest, Aggregator>,
 }
 
 impl Core {
@@ -47,6 +53,7 @@ impl Core {
         name: PublicKey,
         committee: Committee,
         parameters: Parameters,
+        signature_service: SignatureService,
         store: Store,
         synchronizer: Synchronizer,
         payload_maker: PayloadMaker,
@@ -59,6 +66,7 @@ impl Core {
             name,
             committee,
             parameters,
+            signature_service,
             store,
             synchronizer,
             core_channel,
@@ -66,6 +74,7 @@ impl Core {
             network_channel,
             queue,
             payload_maker,
+            pending: HashMap::new(),
         }
     }
 
@@ -128,8 +137,9 @@ impl Core {
         self.transmit(&message, None).await
     }
 
-    async fn handle_own_payload(&mut self, payload: Payload) -> MempoolResult<()> {
+    async fn handle_own_payload(&mut self, payload: Payload, root: Digest) -> MempoolResult<()> {
         // Drop the transaction if our mempool is full.
+        // TODO: do this earlier.
         ensure!(
             self.queue.len() < self.parameters.queue_capacity,
             MempoolError::MempoolFull
@@ -137,9 +147,15 @@ impl Core {
 
         // Otherwise, try to add the transaction to the next payload
         // we will add to the queue.
-        let digest = payload.digest();
-        self.process_own_payload(&digest, payload).await?;
-        self.queue.insert(digest);
+        //let digest = payload.digest();
+        //self.process_own_payload(&digest, payload).await?;
+        //self.queue.insert(digest);
+
+        let mut key = root.to_vec();
+        key.extend(vec![0]);
+        self.store_payload(key, &payload).await;
+
+        self.pending.insert(root, Aggregator::new());
         Ok(())
     }
 
@@ -216,6 +232,42 @@ impl Core {
         }
     }
 
+    async fn handle_coded_payload(&mut self, coded_payload: Vec<u8>) -> MempoolResult<()> {
+        // Verify the coded payload.
+        let root = Digest::default();
+
+        // Store the coded chunk.
+        let key = root.to_vec();
+        let value = bincode::serialize(&coded_payload).expect("Failed to serialize payload");
+        self.store.write(key, value).await;
+
+        // Reply with the signed root.
+        let signature = self.signature_service.request_signature(root.clone()).await;
+        //let to = coded_payload.author;
+        let to = PublicKey::default();
+        let message = MempoolMessage::ChunkAck(root, signature, to.clone());
+        self.transmit(&message, Some(&to)).await
+    }
+
+    async fn handle_chunk_ack(
+        &mut self,
+        root: Digest,
+        signature: Signature,
+        sender: PublicKey,
+    ) -> MempoolResult<()> {
+        signature.verify(&root, &sender)?;
+
+        let certificate = match self.pending.get_mut(&root) {
+            None => return Err(MempoolError::UnexpectedAck(sender)),
+            Some(x) => x.append(root, signature, sender, &self.committee),
+        }?;
+        if let Some(certificate) = certificate {
+            // TODO: Add certificate to the queue
+            //self.queue.insert(certificate);
+        }
+        Ok(())
+    }
+
     pub async fn run(&mut self) {
         let log = |result: Result<&(), &MempoolError>| match result {
             Ok(()) => (),
@@ -228,9 +280,11 @@ impl Core {
             let result = tokio::select! {
                 Some(message) = self.core_channel.recv() => {
                     match message {
-                        MempoolMessage::OwnPayload(payload) => self.handle_own_payload(payload).await,
+                        MempoolMessage::OwnPayload(payload, root) => self.handle_own_payload(payload, root).await,
                         MempoolMessage::Payload(payload) => self.handle_others_payload(payload).await,
                         MempoolMessage::PayloadRequest(digest, sender) => self.handle_request(digest, sender).await,
+                        MempoolMessage::Chunk(coded_payload) => self.handle_coded_payload(coded_payload).await,
+                        MempoolMessage::ChunkAck(root, signature, sender) => self.handle_chunk_ack(root, signature, sender).await
                     }
                 },
                 Some(message) = self.consensus_channel.recv() => {
