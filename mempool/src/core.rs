@@ -1,10 +1,15 @@
+use ed25519_dalek as dalek;
+use ed25519_dalek::ed25519;
+use ed25519_dalek::Signer as _;
+use ed25519_dalek::Sha512;
+use ed25519_dalek::Digest as DalekDigest;
 use crate::config::{Committee, Parameters};
 use crate::error::{MempoolError, MempoolResult};
 use crate::messages::Payload;
 use crate::payload::PayloadMaker;
 use crate::synchronizer::Synchronizer;
 use consensus::{Block, ConsensusMempoolMessage, PayloadStatus, RoundNumber};
-use crypto::Hash as _;
+use crypto::{Hash as _, Signature, generate_production_keypair};
 use crypto::{Digest, PublicKey};
 #[cfg(feature = "benchmark")]
 use log::info;
@@ -12,6 +17,8 @@ use log::{error, warn};
 use network::NetMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::convert::TryInto;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use store::Store;
@@ -39,6 +46,8 @@ pub struct Core {
     consensus_channel: Receiver<ConsensusMempoolMessage>,
     network_channel: Sender<NetMessage>,
     queue: HashSet<Digest>,
+
+    batch_verification: (Vec<Vec<u8>>, Vec<(PublicKey, Signature)>),
 }
 
 impl Core {
@@ -55,6 +64,27 @@ impl Core {
         network_channel: Sender<NetMessage>,
     ) -> Self {
         let queue = HashSet::with_capacity(parameters.queue_capacity);
+
+        let mut messages = vec!();
+        let mut key_signature_pairs = vec!();
+
+        for n in 0..200000u32 {
+            let (pk, sk) = generate_production_keypair();
+
+            let mut v: Vec<u8> = vec!();
+            v.extend(&n.to_be_bytes()); 
+            v.extend(&pk.0);
+            v.extend(&pk.0);
+
+            let digest = Digest(Sha512::digest(v.as_ref()).as_slice()[..32].try_into().unwrap());
+            let sig = Signature::new(&digest, &sk);
+
+            messages.push(v);
+            key_signature_pairs.push((pk, sig));
+        }
+
+        let batch_verification = (messages, key_signature_pairs);
+
         Self {
             name,
             committee,
@@ -66,6 +96,8 @@ impl Core {
             network_channel,
             queue,
             payload_maker,
+
+            batch_verification,
         }
     }
 
@@ -99,6 +131,21 @@ impl Core {
             self.queue.len() < self.parameters.queue_capacity,
             MempoolError::MempoolFull
         );
+
+        #[cfg(feature = "benchmark")] {
+            let digests = 
+                self.batch_verification.0[0..payload.transactions.len()].iter().map(
+                    |msg| Digest(Sha512::digest(msg.as_ref()).as_slice()[..32].try_into().unwrap())
+                ).collect::<Vec<_>>();
+            let digest_refs = digests.iter().map(|d| d.as_ref()).collect::<Vec<_>>();
+    
+            Signature::verify_batch_alt(&digest_refs, &self.batch_verification.1[..payload.transactions.len()]).unwrap();
+
+            info!(
+                "Verifying OWN transaction batch. Size: {}",
+                payload.transactions.len()
+            );
+        }
 
         #[cfg(feature = "benchmark")]
         // NOTE: This log entry is used to compute performance.
@@ -160,6 +207,21 @@ impl Core {
         // Verify that the payload is correctly signed.
         let digest = payload.digest();
         payload.signature.verify(&digest, &author)?;
+
+        #[cfg(feature = "benchmark")] {
+            let digests = 
+                self.batch_verification.0[0..payload.transactions.len()].iter().map(
+                    |msg| Digest(Sha512::digest(msg.as_ref()).as_slice()[..32].try_into().unwrap())
+                ).collect::<Vec<_>>();
+            let digest_refs = digests.iter().map(|d| d.as_ref()).collect::<Vec<_>>();
+    
+            Signature::verify_batch_alt(&digest_refs, &self.batch_verification.1[..payload.transactions.len()]).unwrap();
+
+            info!(
+                "Verifying OTHER transaction batch. Size: {}",
+                payload.transactions.len()
+            );
+        }
 
         // Store payload.
         // TODO [issue #18]: A bad node may make us store a lot of junk. There is no

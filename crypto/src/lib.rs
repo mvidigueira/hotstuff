@@ -205,6 +205,22 @@ impl Signature {
         }
         dalek::verify_batch(&messages[..], &signatures[..], &keys[..])
     }
+
+    pub fn verify_batch_alt<'a, 'b, I>(messages: &Vec<&'a [u8]>, votes: I) -> Result<(), CryptoError>
+    where
+        I: IntoIterator<Item = &'b (PublicKey, Signature)>,
+    {
+        let mut signatures: Vec<dalek::Signature> = Vec::new();
+        let mut keys: Vec<dalek::PublicKey> = Vec::new();
+        for (key, sig) in votes.into_iter() {
+            signatures.push(ed25519::signature::Signature::from_bytes(&sig.flatten())?);
+            keys.push(dalek::PublicKey::from_bytes(&key.0)?);
+        }
+        dalek::verify_batch(&messages[..], &signatures[..], &keys[..])
+    }
+
+
+
 }
 
 #[derive(Clone)]
