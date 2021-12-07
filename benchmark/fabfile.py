@@ -7,6 +7,16 @@ from benchmark.plot import Ploter, PlotError
 from aws.instance import InstanceManager
 from aws.remote import Bench, BenchError
 
+creation_nodes = { "us-east-2": 2, "ap-northeast-1": 1 }
+
+remote_bench_params = {
+    'nodes': [{ "us-east-2": 2, "ap-northeast-1": 1 }],
+    'rate': [25_000, 50_000],
+    'tx_size': 512,
+    'faults': 0,
+    'duration': 60,
+    'runs': 1,
+}
 
 @task
 def local(ctx):
@@ -40,10 +50,11 @@ def local(ctx):
 
 
 @task
-def create(ctx, nodes=2):
+def create(ctx):
     ''' Create a testbed'''
+
     try:
-        InstanceManager.make().create_instances(nodes)
+        InstanceManager.make().create_instances(creation_nodes)
     except BenchError as e:
         Print.error(e)
 
@@ -58,7 +69,7 @@ def destroy(ctx):
 
 
 @task
-def start(ctx, max=2):
+def start(ctx, max = 2):
     ''' Start at most `max` machines per data center '''
     try:
         InstanceManager.make().start_instances(max)
@@ -96,14 +107,6 @@ def install(ctx):
 @task
 def remote(ctx):
     ''' Run benchmarks on AWS '''
-    bench_params = {
-        'nodes': [10, 20],
-        'rate': [25_000, 50_000],
-        'tx_size': 512,
-        'faults': 0,
-        'duration': 300,
-        'runs': 2,
-    }
     node_params = {
         'consensus': {
             'timeout_delay': 5_000,
@@ -119,7 +122,7 @@ def remote(ctx):
         }
     }
     try:
-        Bench(ctx).run(bench_params, node_params, debug=False)
+        Bench(ctx).run(remote_bench_params, node_params, debug=False)
     except BenchError as e:
         Print.error(e)
 

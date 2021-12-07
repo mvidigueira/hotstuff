@@ -114,7 +114,8 @@ class BenchParameters:
         try:
             nodes = json['nodes'] 
             nodes = nodes if isinstance(nodes, list) else [nodes]
-            if not nodes or any(x <= 1 for x in nodes):
+
+            if not nodes or any(any(y < 1 for y in x.values()) for x in nodes):
                 raise ConfigError('Missing or invalid number of nodes')
 
             rate = json['rate'] 
@@ -122,7 +123,8 @@ class BenchParameters:
             if not rate:
                 raise ConfigError('Missing input rate')
 
-            self.nodes = [int(x) for x in nodes]
+            self.nodes = [{y: int(x[y]) for y in x} for x in nodes]
+
             self.rate = [int(x) for x in rate]
             self.tx_size = int(json['tx_size'])
             self.faults = int(json['faults'])
@@ -134,7 +136,7 @@ class BenchParameters:
         except ValueError:
             raise ConfigError('Invalid parameters type')
 
-        if min(self.nodes) <= self.faults:
+        if any(min(x.values()) <= self.faults for x in self.nodes):
             raise ConfigError('There should be more nodes than faults')
 
 

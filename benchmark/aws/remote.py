@@ -66,9 +66,6 @@ class Bench:
             'source $HOME/.cargo/env',
             'rustup default stable',
 
-            # This is missing from the Rocksdb installer (needed for Rocksdb).
-            'sudo apt-get install -y clang',
-
             # Clone the repo.
             f'(git clone {self.settings.repo_url} || (cd {self.settings.repo_name} ; git pull))'
         ]
@@ -94,17 +91,26 @@ class Bench:
             raise BenchError('Failed to kill nodes', FabricError(e))
 
     def _select_hosts(self, bench_parameters):
-        nodes = max(bench_parameters.nodes)
-
         # Ensure there are enough hosts.
+        selected = []
         hosts = self.manager.hosts()
-        if sum(len(x) for x in hosts.values()) < nodes:
-            return []
 
-        # Select the hosts in different data centers.
-        ordered = zip(*hosts.values())
-        ordered = [x for y in ordered for x in y]
-        return ordered[:nodes]
+        for run in bench_parameters.nodes:
+            run_hosts = []
+            for region, number in run.items():
+                if region in hosts:
+                    ips = hosts[region]
+                    if len(ips) >= number:
+                        run_hosts += ips[:number]
+                    else:
+                        Print.warn('Only ' + len(ips) + ' out of ' + number + ' instances available in region \'' + region + "\'")
+                        return []
+                else:
+                    Print.warn('Region \'' + region + "\' is not included in the list of hosts (check settings.json)")
+                    return []
+            selected.append(run_hosts)
+            
+        return selected
 
     def _background_run(self, host, command, log_file):
         name = splitext(basename(log_file))[0]
@@ -122,7 +128,7 @@ class Bench:
             f'(cd {self.settings.repo_name} && git checkout -f {self.settings.branch})',
             f'(cd {self.settings.repo_name} && git pull -f)',
             'source $HOME/.cargo/env',
-            f'(cd {self.settings.repo_name}/node && {CommandMaker.compile()})',
+            f'(cd {self.settings.repo_name} && {CommandMaker.compile()})',
             CommandMaker.alias_binaries(
                 f'./{self.settings.repo_name}/target/release/'
             )
@@ -255,12 +261,17 @@ class Bench:
         # Select which hosts to use.
         selected_hosts = self._select_hosts(bench_parameters)
         if not selected_hosts:
-            Print.warn('There are not enough instances available')
             return
+
+        merged_hosts = list(set.union(*[set(x) for x in selected_hosts]))
+
+        Print.heading('Merged hosts: ' + str(merged_hosts))
+
+        return
 
         # Update nodes.
         try:
-            self._update(selected_hosts)
+            self._update(merged_hosts)
         except (GroupException, ExecutionError) as e:
             e = FabricError(e) if isinstance(e, GroupException) else e
             raise BenchError('Failed to update nodes', e)

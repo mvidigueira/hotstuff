@@ -16,8 +16,8 @@ class AWSError(Exception):
 
 
 class InstanceManager:
-    INSTANCE_NAME = 'hotstuff-node'
-    SECURITY_GROUP_NAME = 'hotstuff'
+    INSTANCE_NAME = 'carbon-node'
+    SECURITY_GROUP_NAME = 'carbon_experiment'
 
     def __init__(self, settings):
         assert isinstance(settings, Settings)
@@ -68,7 +68,7 @@ class InstanceManager:
 
     def _create_security_group(self, client):
         client.create_security_group(
-            Description='HotStuff node',
+            Description='Carbon node',
             GroupName=self.SECURITY_GROUP_NAME,
         )
 
@@ -77,56 +77,17 @@ class InstanceManager:
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 22,
-                    'ToPort': 22,
+                    'FromPort': 0,
+                    'ToPort': 65535,
                     'IpRanges': [{
                         'CidrIp': '0.0.0.0/0',
-                        'Description': 'Debug SSH access',
+                        'Description': 'All access',
                     }],
                     'Ipv6Ranges': [{
                         'CidrIpv6': '::/0',
-                        'Description': 'Debug SSH access',
+                        'Description': 'All access',
                     }],
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.consensus_port,
-                    'ToPort': self.settings.consensus_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'Consensus port',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'Consensus port',
-                    }],
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.mempool_port,
-                    'ToPort': self.settings.mempool_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'Mempool port',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'Mempool port',
-                    }],
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.front_port,
-                    'ToPort': self.settings.front_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'Front end to accept clients transactions',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'Front end to accept clients transactions',
-                    }],
-                },
+                }
             ]
         )
 
@@ -138,10 +99,13 @@ class InstanceManager:
                 'Values': ['Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2020-10-26']
             }]
         )
+        # ['Canonical, Ubuntu, 20.04 LTS, arm64 focal image build on 2020-07-01']
         return response['Images'][0]['ImageId']
 
     def create_instances(self, instances):
-        assert isinstance(instances, int) and instances > 0
+        assert isinstance(instances, dict) 
+        assert all(x > 0 for x in instances.values())
+        assert all(k in self.clients.keys() for k in instances.keys())
 
         # Create the security group in every region.
         for client in self.clients.values():
@@ -154,17 +118,20 @@ class InstanceManager:
 
         try:
             # Create all instances.
-            size = instances * len(self.clients)
+            size = sum(instances.values())
+
+            clients = [(self.clients[k], number) for (k, number) in instances.items()]
+
             progress = progress_bar(
-                self.clients.values(), prefix=f'Creating {size} instances'
+                clients, prefix=f'Creating {size} instances'
             )
-            for client in progress:
+            for (client, number) in progress:
                 client.run_instances(
                     ImageId=self._get_ami(client),
                     InstanceType=self.settings.instance_type,
                     KeyName=self.settings.key_name,
-                    MaxCount=instances,
-                    MinCount=instances,
+                    MaxCount=number,
+                    MinCount=number,
                     SecurityGroups=[self.SECURITY_GROUP_NAME],
                     TagSpecifications=[{
                         'ResourceType': 'instance',
@@ -174,14 +141,6 @@ class InstanceManager:
                         }]
                     }],
                     EbsOptimized=True,
-                    BlockDeviceMappings=[{
-                        'DeviceName': '/dev/sda1',
-                        'Ebs': {
-                            'VolumeType': 'gp2',
-                            'VolumeSize': 200,
-                            'DeleteOnTermination': True
-                        }
-                    }],
                 )
 
             # Wait for the instances to boot.
