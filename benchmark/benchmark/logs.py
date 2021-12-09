@@ -13,50 +13,35 @@ class ParseError(Exception):
 
 
 class LogParser:
-    def __init__(self, clients, nodes, faults=0):
-        inputs = [clients, nodes]
+    def __init__(self, nodes, brokers, faults=0):
+        inputs = [nodes, brokers]
         assert all(isinstance(x, list) for x in inputs)
         assert all(isinstance(x, str) for y in inputs for x in y)
         assert all(x for x in inputs)
 
         self.faults = faults
-        self.committee_size = len(nodes) + faults
+        self.num_replicas = len(nodes) + faults
+        self.num_brokers = len(brokers)
 
-        # Parse the clients logs.
+        # Parse the brokers' logs.
         try:
             with Pool() as p:
-                results = p.map(self._parse_clients, clients)
+                results = p.map(self._parse_brokers, brokers)
         except (ValueError, IndexError) as e:
-            raise ParseError(f'Failed to parse client logs: {e}')
-        self.size, self.rate, self.start, misses, self.sent_samples \
-            = zip(*results)
-        self.misses = sum(misses)
+            raise ParseError(f'Failed to parse brokers logs: {e}')
 
-        # Parse the nodes logs.
+        self.signup_batch_number, self.signup_batch_size, self.signup_batches_start, \
+            self.signup_batches_end, self.signup_start, self.signup_end \
+            = zip(*results)
+
+        # Parse the nodes' logs.
         try:
             with Pool() as p:
                 results = p.map(self._parse_nodes, nodes)
         except (ValueError, IndexError) as e:
-            raise ParseError(f'Failed to parse node logs: {e}')
-        proposals, commits, sizes, self.received_samples, timeouts, self.configs \
-            = zip(*results)
-        self.proposals = self._merge_results([x.items() for x in proposals])
-        self.commits = self._merge_results([x.items() for x in commits])
-        self.sizes = {
-            k: v for x in sizes for k, v in x.items() if k in self.commits
-        }
-        self.timeouts = max(timeouts)
+            raise ParseError(f'Failed to parse brokers logs: {e}')
 
-        # Check whether clients missed their target rate.
-        if self.misses != 0:
-            Print.warn(
-                f'Clients missed their target rate {self.misses:,} time(s)'
-            )
-
-        # Check whether the nodes timed out.
-        # Note that nodes are expected to time out once at the beginning.
-        if self.timeouts > 2:
-            Print.warn(f'Nodes timed out {self.timeouts:,} time(s)')
+        self.configs = results
 
     def _merge_results(self, input):
         # Keep the earliest timestamp.
@@ -66,6 +51,27 @@ class LogParser:
                 if not k in merged or merged[k] > v:
                     merged[k] = v
         return merged
+
+    def _parse_brokers(self, log):
+        if search(r'Error', log) is not None:
+            raise ParseError('Broker(s) panicked')
+
+        signup_batch_number = int(search(r'Signup batch number: (\d+)', log).group(1))
+        signup_batch_size = int(search(r'Signup batch size: (\d+)', log).group(1))
+
+        tmp = findall(r'\[(.*Z) .* Signing up batch (\d+)', log)
+        signup_batches_start = {int(s): self._to_posix(t) for t, s in tmp}
+
+        tmp = findall(r'\[(.*Z) .* Completed signing up batch (\d+)', log)
+        signup_batches_end = {int(s): self._to_posix(t) for t, s in tmp}
+
+        tmp = search(r'\[(.*Z) .* Starting signup...', log).group(1)
+        start = self._to_posix(tmp)
+
+        tmp = search(r'\[(.*Z) .* Signup complete!', log).group(1)
+        end = self._to_posix(tmp)
+
+        return signup_batch_number, signup_batch_size, signup_batches_start, signup_batches_end, start, end
 
     def _parse_clients(self, log):
         if search(r'Error', log) is not None:
@@ -86,65 +92,37 @@ class LogParser:
 
     def _parse_nodes(self, log):
         if search(r'panic', log) is not None:
-            raise ParseError('Client(s) panicked')
-
-        tmp = findall(r'\[(.*Z) .* Created B\d+\(([^ ]+)\)', log)
-        tmp = [(d, self._to_posix(t)) for t, d in tmp]
-        proposals = self._merge_results([tmp])
-
-        tmp = findall(r'\[(.*Z) .* Committed B\d+\(([^ ]+)\)', log)
-        tmp = [(d, self._to_posix(t)) for t, d in tmp]
-        commits = self._merge_results([tmp])
-
-        tmp = findall(r'Payload ([^ ]+) contains (\d+) B', log)
-        sizes = {d: int(s) for d, s in tmp}
-
-        tmp = findall(r'Payload ([^ ]+) contains sample tx (\d+)', log)
-        samples = {int(s): d for d, s in tmp}
-
-        tmp = findall(r'.* WARN .* Timeout', log)
-        timeouts = len(tmp)
+            raise ParseError('Node(s) panicked')
 
         configs = {
-            'consensus': {
-                'timeout_delay': int(
-                    search(r'Consensus timeout delay .* (\d+)', log).group(1)
+            'broker': {
+                'signup_batch_number': int(
+                    search(r'Broker signup batch number (\d+)', log).group(1)
                 ),
-                'sync_retry_delay': int(
-                    search(
-                        r'Consensus synchronizer retry delay .* (\d+)', log
-                    ).group(1)
-                ),
-                'max_payload_size': int(
-                    search(r'Consensus max payload size .* (\d+)', log).group(1)
-                ),
-                'min_block_delay': int(
-                    search(r'Consensus min block delay .* (\d+)', log).group(1)
+                'signup_batch_size': int(
+                    search(r'Broker signup batch size (\d+)', log).group(1)
                 ),
             },
-            'mempool': {
-                'queue_capacity': int(
-                    search(r'Mempool queue capacity set to (\d+)', log).group(1)
-                ),
-                'sync_retry_delay': int(
-                    search(
-                        r'Mempool synchronizer retry delay .* (\d+)', log
-                    ).group(1)
-                ),
-                'max_payload_size': int(
-                    search(r'Mempool max payload size .* (\d+)', log).group(1)
-                ),
-                'min_block_delay': int(
-                    search(r'Mempool min block delay .* (\d+)', log).group(1)
-                ),
-            }
         }
 
-        return proposals, commits, sizes, samples, timeouts, configs
+        return configs
 
     def _to_posix(self, string):
         x = datetime.fromisoformat(string.replace('Z', '+00:00'))
         return datetime.timestamp(x)
+
+    def _signup_throughput(self):
+        start, end = min(self.signup_start), max(self.signup_end)
+        duration = end - start
+        signups = self.signup_batch_number[0] * self.signup_batch_size[0]
+        throughput = signups / duration
+        return throughput, duration
+
+    def _signup_latency(self):
+        latency = [c - starts[d] \
+            for (starts, ends) in zip(self.signup_batches_start, self.signup_batches_end) for d, c in ends.items()]
+
+        return mean(latency) if latency else 0
 
     def _consensus_throughput(self):
         if not self.commits:
@@ -182,19 +160,14 @@ class LogParser:
         return mean(latency) if latency else 0
 
     def result(self):
-        consensus_latency = self._consensus_latency() * 1000
-        consensus_tps, consensus_bps, _ = self._consensus_throughput()
-        end_to_end_tps, end_to_end_bps, duration = self._end_to_end_throughput()
-        end_to_end_latency = self._end_to_end_latency() * 1000
-
-        consensus_timeout_delay = self.configs[0]['consensus']['timeout_delay']
-        consensus_sync_retry_delay = self.configs[0]['consensus']['sync_retry_delay']
-        consensus_max_payload_size = self.configs[0]['consensus']['max_payload_size']
-        consensus_min_block_delay = self.configs[0]['consensus']['min_block_delay']
-        mempool_queue_capacity = self.configs[0]['mempool']['queue_capacity']
-        mempool_sync_retry_delay = self.configs[0]['mempool']['sync_retry_delay']
-        mempool_max_payload_size = self.configs[0]['mempool']['max_payload_size']
-        mempool_min_block_delay = self.configs[0]['mempool']['min_block_delay']
+        signup_throughput, duration = self._signup_throughput()
+        signup_latency = self._signup_latency() * 1000
+        # consensus_latency = self._consensus_latency() * 1000
+        # consensus_tps, consensus_bps, _ = self._consensus_throughput()
+        # end_to_end_tps, end_to_end_bps, duration = self._end_to_end_throughput()
+        # end_to_end_latency = self._end_to_end_latency() * 1000
+        signup_batch_number = self.configs[0]['broker']['signup_batch_number']
+        signup_batch_size = self.configs[0]['broker']['signup_batch_size']
 
         return (
             '\n'
@@ -202,29 +175,19 @@ class LogParser:
             ' SUMMARY:\n'
             '-----------------------------------------\n'
             ' + CONFIG:\n'
-            f' Committee size: {self.committee_size} nodes\n'
-            f' Input rate: {sum(self.rate):,} tx/s\n'
-            f' Transaction size: {self.size[0]:,} B\n'
+            f' Number of replicas: {self.num_replicas}\n'
+            f' Number of brokers: {self.num_brokers}\n'
             f' Faults: {self.faults} nodes\n'
             f' Execution time: {round(duration):,} s\n'
             '\n'
-            f' Consensus timeout delay: {consensus_timeout_delay:,} ms\n'
-            f' Consensus sync retry delay: {consensus_sync_retry_delay:,} ms\n'
-            f' Consensus max payloads size: {consensus_max_payload_size:,} B\n'
-            f' Consensus min block delay: {consensus_min_block_delay:,} ms\n'
-            f' Mempool queue capacity: {mempool_queue_capacity:,} B\n'
-            f' Mempool sync retry delay: {mempool_sync_retry_delay:,} ms\n'
-            f' Mempool max payloads size: {mempool_max_payload_size:,} B\n'
-            f' Mempool min block delay: {mempool_min_block_delay:,} ms\n'
+            f' Number of signup batches: {signup_batch_number} \n'
+            f' Size of a signup batch: {signup_batch_size} \n'
+            f' Total number of signups: {signup_batch_number * signup_batch_size} \n'
             '\n'
             ' + RESULTS:\n'
-            f' Consensus TPS: {round(consensus_tps):,} tx/s\n'
-            f' Consensus BPS: {round(consensus_bps):,} B/s\n'
-            f' Consensus latency: {round(consensus_latency):,} ms\n'
+            f' Signup TPS: {round(signup_throughput):,} signups/s\n'
+            f' Signup latency: {round(signup_latency):,} ms\n'
             '\n'
-            f' End-to-end TPS: {round(end_to_end_tps):,} tx/s\n'
-            f' End-to-end BPS: {round(end_to_end_bps):,} B/s\n'
-            f' End-to-end latency: {round(end_to_end_latency):,} ms\n'
             '-----------------------------------------\n'
         )
 
@@ -237,13 +200,13 @@ class LogParser:
     def process(cls, directory, faults=0):
         assert isinstance(directory, str)
 
-        clients = []
-        for filename in sorted(glob(join(directory, 'client-*.log'))):
+        brokers = []
+        for filename in sorted(glob(join(directory, 'broker-*.log'))):
             with open(filename, 'r') as f:
-                clients += [f.read()]
+                brokers += [f.read()]
         nodes = []
-        for filename in sorted(glob(join(directory, 'node-*.log'))):
+        for filename in sorted(glob(join(directory, 'replica-*.log'))):
             with open(filename, 'r') as f:
                 nodes += [f.read()]
 
-        return cls(clients, nodes, faults=faults)
+        return cls(nodes, brokers, faults=faults)

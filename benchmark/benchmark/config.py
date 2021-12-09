@@ -86,21 +86,14 @@ class NodeParameters:
     def __init__(self, json):
         inputs = []
         try:
-            inputs += [json['consensus']['timeout_delay']]
-            inputs += [json['consensus']['sync_retry_delay']]
-            inputs += [json['consensus']['max_payload_size']]
-            inputs += [json['consensus']['min_block_delay']]
-            inputs += [json['mempool']['queue_capacity']]
-            inputs += [json['consensus']['sync_retry_delay']]
-            inputs += [json['mempool']['max_payload_size']]
-            inputs += [json['mempool']['min_block_delay']]
+            inputs += [json['broker']['signup_batch_number']]
+            inputs += [json['broker']['signup_batch_size']]
         except KeyError as e:
             raise ConfigError(f'Malformed parameters: missing key {e}')
 
         if not all(isinstance(x, int) for x in inputs):
             raise ConfigError('Invalid parameters type')
-
-        self.timeout_delay = json['consensus']['timeout_delay'] 
+            
         self.json = json
 
     def print(self, filename):

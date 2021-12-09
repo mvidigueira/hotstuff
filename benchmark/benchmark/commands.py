@@ -25,23 +25,24 @@ class CommandMaker:
         return f'./node keys --filename {filename}'
 
     @staticmethod
-    def run_node(rendezvous, discovery, debug=False):
+    def run_node(rendezvous, discovery, parameters, debug=False):
         assert isinstance(rendezvous, str)
         assert isinstance(discovery, str)
         # assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./replica {v} run --rendezvous {rendezvous} --discovery {discovery} ')
+        return (f'./replica {v} run --rendezvous {rendezvous} --discovery {discovery} '
+                f' --parameters {parameters}')
 
     @staticmethod
-    def run_broker(rendezvous, full=False, debug=False):
+    def run_broker(rendezvous, parameters, full=False, debug=False):
         assert isinstance(rendezvous, str)
         assert isinstance(full, bool)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
         full = '--full=true' if full else '--full=false'
-        return (f'./broker {v} run --rendezvous {rendezvous} ' + full)
-                # f'--parameters {parameters}')
+        return (f'./broker {v} run --rendezvous {rendezvous} ' + full +
+                f' --parameters {parameters}')
 
     @staticmethod
     def run_client(address, size, rate, timeout, nodes=[]):
@@ -54,6 +55,7 @@ class CommandMaker:
         return (f'./client {address} --size {size} '
                 f'--rate {rate} --timeout {timeout} {nodes}')
 
+    @staticmethod
     def run_rendezvous(num_nodes):
         assert isinstance(num_nodes, int)
         return f'./rendezvous -vv run --size {num_nodes}'

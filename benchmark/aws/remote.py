@@ -161,7 +161,7 @@ class Bench:
         g.run(' && '.join(tcp_settings), hide=True)
         g.run(' && '.join(cmd), hide=True)
 
-    def _config(self, hosts):
+    def _config(self, hosts, node_parameters):
         Print.info('Cleaning up nodes...')
 
         # Cleanup all nodes.
@@ -169,13 +169,13 @@ class Bench:
         g = Group(*hosts, user='ubuntu', connect_kwargs=self.connect)
         g.run(cmd, hide=True)
 
-        # node_parameters.print(PathMaker.parameters_file())
+        node_parameters.print(PathMaker.parameters_file())
         
         # Upload configuration files.
-        # progress = progress_bar(hosts, prefix='Uploading config files:')
-        # for host in progress:
-        #     c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
-        #     c.put(PathMaker.parameters_file(), '.')
+        progress = progress_bar(hosts, prefix='Uploading config files:')
+        for host in progress:
+            c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
+            c.put(PathMaker.parameters_file(), '.')
 
         return
 
@@ -202,6 +202,7 @@ class Bench:
             cmd = CommandMaker.run_node(
                 rendezvous = rendezvous_server,
                 discovery = rendezvous_server,
+                parameters = PathMaker.parameters_file(),
                 debug=debug
             )
             self._background_run(host, cmd, log_file)
@@ -216,12 +217,13 @@ class Bench:
         for broker, log_file in zip(brokers, broker_logs):
             cmd = CommandMaker.run_broker(
                 rendezvous = rendezvous_server,
+                parameters = PathMaker.parameters_file(),
                 debug=debug
             )
             self._background_run(broker, cmd, log_file)
 
         Print.info('Waiting for the broker(s) to finish...')
-        sleep(60)
+        sleep(45)
 
         self.kill(hosts=hosts, delete_logs=False)
         self.kill(hosts=brokers, delete_logs=False)
@@ -237,20 +239,20 @@ class Bench:
         c.get(PathMaker.rendezvous_log_file(), local=PathMaker.rendezvous_log_file())
 
         # Download log files.
-        progress = progress_bar(brokers, prefix='Downloading logs:')
+        progress = progress_bar(brokers, prefix='Downloading broker logs:')
         for i, host in enumerate(progress):
             c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
             c.get(PathMaker.broker_log_file(i), local=PathMaker.broker_log_file(i))
 
         # Download log files.
-        progress = progress_bar(hosts, prefix='Downloading logs:')
+        progress = progress_bar(hosts, prefix='Downloading replica logs:')
         for i, host in enumerate(progress):
             c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
             c.get(PathMaker.node_log_file(i), local=PathMaker.node_log_file(i))
 
         # Parse logs and return the parser.
         Print.info('All logs downloaded!')
-        return
+
         return LogParser.process(PathMaker.logs_path(), faults=faults)
 
     def _start_rendezvous(self, host, num_nodes):
@@ -266,7 +268,7 @@ class Bench:
         Print.heading('Starting remote benchmark')
         try:
             bench_parameters = BenchParameters(bench_parameters_dict)
-            # node_parameters = NodeParameters(node_parameters_dict)
+            node_parameters = NodeParameters(node_parameters_dict)
         except ConfigError as e:
             raise BenchError('Invalid nodes or bench parameters', e)
 
@@ -301,7 +303,7 @@ class Bench:
 
                 # Upload all configuration files.
                 try:
-                    self._config(hosts + brokers)
+                    self._config(hosts + brokers, node_parameters)
                 except (subprocess.SubprocessError, GroupException) as e:
                     e = FabricError(e) if isinstance(e, GroupException) else e
                     Print.error(BenchError('Failed to configure nodes', e))
@@ -318,11 +320,9 @@ class Bench:
                         self._run_single(
                             hosts, brokers, r, bench_parameters, debug
                         )
-                        sleep(2)
-                        self._logs(hosts, brokers, faults)
-                        # .print(PathMaker.result_file(
-                        #     n, r, bench_parameters.tx_size, faults
-                        # ))
+                        self._logs(hosts, brokers, faults).print(PathMaker.result_file(
+                            n, b, faults
+                        ))
                     except (subprocess.SubprocessError, GroupException, ParseError) as e:
                         self.kill(hosts=hosts)
                         if isinstance(e, GroupException):

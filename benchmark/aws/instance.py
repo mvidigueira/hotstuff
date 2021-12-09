@@ -139,6 +139,14 @@ class InstanceManager:
                         }]
                     }],
                     EbsOptimized=True,
+                    BlockDeviceMappings=[{
+                        'DeviceName': '/dev/sda1',
+                        'Ebs': {
+                            'VolumeType': 'gp2',
+                            'VolumeSize': 200,
+                            'DeleteOnTermination': True
+                        }
+                    }],
                 )
 
             # Wait for the instances to boot.

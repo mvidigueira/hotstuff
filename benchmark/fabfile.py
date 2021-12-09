@@ -1,16 +1,16 @@
 from fabric import task
 
-from benchmark.local import LocalBench
 from benchmark.logs import ParseError, LogParser
 from benchmark.utils import Print
 from benchmark.plot import Ploter, PlotError
 from aws.instance import InstanceManager
 from aws.remote import Bench, BenchError
 
-creation_nodes = { "us-east-2": 3, "ap-northeast-1": 2 }
+creation_nodes = { "us-east-2": 5 }
 
+# , "ap-northeast-1": 2
 remote_bench_params = {
-    'nodes': [{ "us-east-2": 2, "ap-northeast-1": 2 }],
+    'nodes': [{ "us-east-2": 4 }],
     'fast_brokers': [{ "us-east-2": 1 }],
     'rate': [50_000],
     'tx_size': 512,
@@ -30,9 +30,9 @@ def local(ctx):
         'duration': 20,
     }
     node_params = {
-        'consensus': {
-            'timeout_delay': 1_000,
-            'sync_retry_delay': 10_000,
+        'broker': {
+            'signup_batch_number': 10,
+            'signup_batch_size': 5_000,
             'max_payload_size': 500,
             'min_block_delay': 0
         },
@@ -108,7 +108,12 @@ def install(ctx):
 @task
 def remote(ctx):
     ''' Run benchmarks on AWS '''
-    node_params = {}
+    node_params = {
+        'broker': {
+            'signup_batch_number': 10,
+            'signup_batch_size': 5_000,
+        },
+    }
     try:
         Bench(ctx).run(remote_bench_params, node_params, debug=False)
     except BenchError as e:
