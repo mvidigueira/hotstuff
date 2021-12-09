@@ -9,12 +9,12 @@
         "front": 6000
     },
     "repo": {
-        "name": "buckets",
-        "url": "https://github.com/Distributed-EPFL/buckets.git",
-        "branch": "main"
+        "name": "carbon",
+        "url": "https://github.com/Distributed-EPFL/carbon.git",
+        "branch": "benchmark"
     },
     "instances": {
-        "type": "c4.xlarge",
+        "type": "c5a.16xlarge",
         "regions": ["us-east-2", "ap-northeast-1"]
     }
 }

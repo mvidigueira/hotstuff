@@ -16,7 +16,7 @@ class PathMaker:
 
     @staticmethod
     def node_crate_path():
-        return join('..', 'node')
+        return '.'
 
     @staticmethod
     def committee_file():
@@ -43,7 +43,16 @@ class PathMaker:
     @staticmethod
     def node_log_file(i):
         assert isinstance(i, int) and i >= 0
-        return join(PathMaker.logs_path(), f'node-{i}.log')
+        return join(PathMaker.logs_path(), f'replica-{i}.log')
+
+    @staticmethod
+    def broker_log_file(i):
+        assert isinstance(i, int) and i >= 0
+        return join(PathMaker.logs_path(), f'broker-{i}.log')
+
+    @staticmethod
+    def rendezvous_log_file():
+        return join(PathMaker.logs_path(), f'rendezvous-server.log')
 
     @staticmethod
     def client_log_file(i):

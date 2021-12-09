@@ -7,11 +7,12 @@ from benchmark.plot import Ploter, PlotError
 from aws.instance import InstanceManager
 from aws.remote import Bench, BenchError
 
-creation_nodes = { "us-east-2": 2, "ap-northeast-1": 1 }
+creation_nodes = { "us-east-2": 3, "ap-northeast-1": 2 }
 
 remote_bench_params = {
-    'nodes': [{ "us-east-2": 2, "ap-northeast-1": 1 }],
-    'rate': [25_000, 50_000],
+    'nodes': [{ "us-east-2": 2, "ap-northeast-1": 2 }],
+    'fast_brokers': [{ "us-east-2": 1 }],
+    'rate': [50_000],
     'tx_size': 512,
     'faults': 0,
     'duration': 60,
@@ -107,20 +108,7 @@ def install(ctx):
 @task
 def remote(ctx):
     ''' Run benchmarks on AWS '''
-    node_params = {
-        'consensus': {
-            'timeout_delay': 5_000,
-            'sync_retry_delay': 100_000,
-            'max_payload_size': 1_000,
-            'min_block_delay': 100
-        },
-        'mempool': {
-            'queue_capacity': 100_000,
-            'sync_retry_delay': 100_000,
-            'max_payload_size': 500_000,
-            'min_block_delay': 100
-        }
-    }
+    node_params = {}
     try:
         Bench(ctx).run(remote_bench_params, node_params, debug=False)
     except BenchError as e:

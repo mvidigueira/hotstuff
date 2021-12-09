@@ -25,14 +25,23 @@ class CommandMaker:
         return f'./node keys --filename {filename}'
 
     @staticmethod
-    def run_node(keys, committee, store, parameters, debug=False):
-        assert isinstance(keys, str)
-        assert isinstance(committee, str)
-        assert isinstance(parameters, str)
+    def run_node(rendezvous, discovery, debug=False):
+        assert isinstance(rendezvous, str)
+        assert isinstance(discovery, str)
+        # assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--store {store} --parameters {parameters}')
+        return (f'./replica {v} run --rendezvous {rendezvous} --discovery {discovery} ')
+
+    @staticmethod
+    def run_broker(rendezvous, full=False, debug=False):
+        assert isinstance(rendezvous, str)
+        assert isinstance(full, bool)
+        assert isinstance(debug, bool)
+        v = '-vvv' if debug else '-vv'
+        full = '--full=true' if full else '--full=false'
+        return (f'./broker {v} run --rendezvous {rendezvous} ' + full)
+                # f'--parameters {parameters}')
 
     @staticmethod
     def run_client(address, size, rate, timeout, nodes=[]):
@@ -45,6 +54,10 @@ class CommandMaker:
         return (f'./client {address} --size {size} '
                 f'--rate {rate} --timeout {timeout} {nodes}')
 
+    def run_rendezvous(num_nodes):
+        assert isinstance(num_nodes, int)
+        return f'./rendezvous -vv run --size {num_nodes}'
+
     @staticmethod
     def kill():
         return 'tmux kill-server'
@@ -52,5 +65,5 @@ class CommandMaker:
     @staticmethod
     def alias_binaries(origin):
         assert isinstance(origin, str)
-        node, client = join(origin, 'node'), join(origin, 'client')
-        return f'rm node ; rm client ; ln -s {node} . ; ln -s {client} .'
+        rendezvous, replica, broker = join(origin, 'rendezvous'), join(origin, 'replica'), join(origin, 'broker')
+        return f'rm rendezvous; rm replica ; rm broker; ln -s {rendezvous} .; ln -s {replica} .; ln -s {broker} .'

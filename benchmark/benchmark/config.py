@@ -118,12 +118,25 @@ class BenchParameters:
             if not nodes or any(any(y < 1 for y in x.values()) for x in nodes):
                 raise ConfigError('Missing or invalid number of nodes')
 
+            self.nodes = [{y: int(x[y]) for y in x} for x in nodes]
+
+            fast_brokers = json['fast_brokers'] 
+            fast_brokers = fast_brokers if isinstance(fast_brokers, list) else [fast_brokers]
+
+            if not fast_brokers:
+                self.fast_brokers = [dict()]
+            else:
+                if any(any(y < 1 for y in x.values()) for x in fast_brokers):
+                    raise ConfigError('Missing or invalid number of fast_brokers')
+                self.fast_brokers = [{y: int(x[y]) for y in x} for x in fast_brokers]
+
+            if len(self.fast_brokers) != 1:
+                raise ConfigError('The number of fast brokers cannot change between runs')
+
             rate = json['rate'] 
             rate = rate if isinstance(rate, list) else [rate]
             if not rate:
                 raise ConfigError('Missing input rate')
-
-            self.nodes = [{y: int(x[y]) for y in x} for x in nodes]
 
             self.rate = [int(x) for x in rate]
             self.tx_size = int(json['tx_size'])

@@ -17,7 +17,7 @@ class AWSError(Exception):
 
 class InstanceManager:
     INSTANCE_NAME = 'carbon-node'
-    SECURITY_GROUP_NAME = 'carbon_experiment'
+    SECURITY_GROUP_NAME = 'carbon_experiment_updated'
 
     def __init__(self, settings):
         assert isinstance(settings, Settings)
@@ -76,9 +76,7 @@ class InstanceManager:
             GroupName=self.SECURITY_GROUP_NAME,
             IpPermissions=[
                 {
-                    'IpProtocol': 'tcp',
-                    'FromPort': 0,
-                    'ToPort': 65535,
+                    'IpProtocol': '-1',
                     'IpRanges': [{
                         'CidrIp': '0.0.0.0/0',
                         'Description': 'All access',
