@@ -9,7 +9,7 @@ from math import ceil
 from os.path import join
 import subprocess
 
-from benchmark.config import Committee, Key, NodeParameters, BenchParameters, ConfigError
+from benchmark.config import NodeParameters, BenchParameters, ConfigError
 from benchmark.utils import BenchError, Print, PathMaker, progress_bar
 from benchmark.commands import CommandMaker
 from benchmark.logs import LogParser, ParseError
@@ -190,7 +190,8 @@ class Bench:
 
         # Run the rendezvous server
         num_nodes = len(hosts)
-        self._start_rendezvous(hosts[0], num_nodes)
+        num_brokers = len(brokers)
+        self._start_rendezvous(hosts[0], num_nodes, num_brokers)
 
         rendezvous_server = hosts[0] + ":9000"
 
@@ -223,7 +224,7 @@ class Bench:
             self._background_run(broker, cmd, log_file)
 
         Print.info('Waiting for the broker(s) to finish...')
-        sleep(45)
+        sleep(40)
 
         self.kill(hosts=hosts, delete_logs=False)
         self.kill(hosts=brokers, delete_logs=False)
@@ -255,8 +256,8 @@ class Bench:
 
         return LogParser.process(PathMaker.logs_path(), faults=faults)
 
-    def _start_rendezvous(self, host, num_nodes):
-        cmd = CommandMaker.run_rendezvous(num_nodes)
+    def _start_rendezvous(self, host, num_nodes, num_brokers):
+        cmd = CommandMaker.run_rendezvous(num_nodes, num_brokers)
         log_file = PathMaker.rendezvous_log_file()
 
         self._background_run(host, cmd, log_file)

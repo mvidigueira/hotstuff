@@ -56,9 +56,9 @@ class CommandMaker:
                 f'--rate {rate} --timeout {timeout} {nodes}')
 
     @staticmethod
-    def run_rendezvous(num_nodes):
+    def run_rendezvous(num_nodes, num_brokers):
         assert isinstance(num_nodes, int)
-        return f'./rendezvous -vv run --size {num_nodes}'
+        return f'./rendezvous -vv run --size {num_nodes} --brokers {num_brokers}'
 
     @staticmethod
     def kill():

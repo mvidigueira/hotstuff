@@ -1,0 +1,52 @@
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 4
+ Number of brokers: 4
+ Faults: 0 nodes
+ Execution time: 43 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 400000 
+
+ + RESULTS:
+ Signup TPS: 9,404 signups/s
+ Signup latency: 20,931 ms
+ Id request processing latency: 8,363 ms
+ Id claim processing latency: 6,076 ms
+ Id assignments processing latency: 5,685 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 4
+ Number of brokers: 4
+ Faults: 0 nodes
+ Signup execution time: 43 s
+ Prepare execution time: 0 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 400000 
+ Number of prepare batches: 1 
+ Size of a prepare batch: 50000 
+ Precentage of single signatures: 0 %
+ Total number of TX: 200000 
+
+ + RESULTS:
+ Signup TPS: 9,341 signups/s
+ Signup latency: 21,223 ms
+ Id request processing latency: 8,411 ms
+ Id claim processing latency: 5,984 ms
+ Id assignments processing latency: 5,612 ms
+ Prepare TPS: 0 signups/s
+ Prepare latency: 0 ms
+ Prepare pre-compute latency: 0 ms
+
+-----------------------------------------

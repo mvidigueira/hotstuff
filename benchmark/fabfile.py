@@ -6,12 +6,12 @@ from benchmark.plot import Ploter, PlotError
 from aws.instance import InstanceManager
 from aws.remote import Bench, BenchError
 
-creation_nodes = { "us-east-2": 5 }
+creation_nodes = { "us-east-2": 4, "ap-northeast-1": 4 }
 
 # , "ap-northeast-1": 2
 remote_bench_params = {
-    'nodes': [{ "us-east-2": 4 }],
-    'fast_brokers': [{ "us-east-2": 1 }],
+    'nodes': [{ "us-east-2": 2, "ap-northeast-1": 2 }],
+    'fast_brokers': [{ "us-east-2": 2, "ap-northeast-1": 2 }],
     'rate': [50_000],
     'tx_size': 512,
     'faults': 0,
@@ -70,7 +70,7 @@ def destroy(ctx):
 
 
 @task
-def start(ctx, max = 2):
+def start(ctx, max = 5):
     ''' Start at most `max` machines per data center '''
     try:
         InstanceManager.make().start_instances(max)
@@ -110,8 +110,11 @@ def remote(ctx):
     ''' Run benchmarks on AWS '''
     node_params = {
         'broker': {
-            'signup_batch_number': 10,
-            'signup_batch_size': 5_000,
+            'signup_batch_number': 20,
+            'signup_batch_size': 5000,
+            'prepare_batch_size': 50000,
+            'prepare_batch_number': 1,
+            'prepare_single_sign_percentage': 0,
         },
     }
     try:
