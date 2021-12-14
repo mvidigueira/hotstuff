@@ -1,0 +1,234 @@
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 64
+ Number of fast brokers: 63
+ Number of full brokers: 1
+ Number of clients: 4
+ Input rate cap: 2000000
+ Faults: 0 nodes
+ Signup execution time: 80 s
+ Prepare execution time: 219 s
+ Single sign percentage: 31,618 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 0 %
+ Brokerage timeout: 1000 ms
+ Reduction timeout: 1000 ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 3150000 
+ Number of prepare batches: 75 
+ Total number of TX (fast): 236250000 
+
+ + RESULTS:
+ Prepare TPS: 1,078,910 Prepare/s
+ Prepare end-to-end latency: 31,618 ms
+
+ Mean brokerage batch size: 33.3 %
+ Mean reduction percentage: 100.0 %
+
+ Prepare pre-compute latency: 5,096 ms
+ Total prepare batch processing latency: 6,036 ms
+ - batch correctness validate latency: 11 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 3 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 39,229 Signup/s
+ Signup latency: 5,263 ms
+ Id request processing latency: 367 ms
+ Id claim processing latency: 101 ms
+ Id assignments processing latency: 50 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 64
+ Number of fast brokers: 63
+ Number of full brokers: 1
+ Number of clients: 4
+ Input rate cap: 1500000
+ Faults: 0 nodes
+ Signup execution time: 83 s
+ Prepare execution time: 169 s
+ Single sign percentage: 16,458 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 0 %
+ Brokerage timeout: 1000 ms
+ Reduction timeout: 1000 ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 3150000 
+ Number of prepare batches: 56 
+ Total number of TX (fast): 176400000 
+
+ + RESULTS:
+ Prepare TPS: 1,042,294 Prepare/s
+ Prepare end-to-end latency: 16,458 ms
+
+ Mean brokerage batch size: 33.3 %
+ Mean reduction percentage: 100.0 %
+
+ Prepare pre-compute latency: 3,825 ms
+ Total prepare batch processing latency: 3,192 ms
+ - batch correctness validate latency: 11 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 3 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 37,959 Signup/s
+ Signup latency: 5,291 ms
+ Id request processing latency: 277 ms
+ Id claim processing latency: 125 ms
+ Id assignments processing latency: 59 ms
+
+-----------------------------------------
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 64
+ Number of fast brokers: 63
+ Number of full brokers: 1
+ Number of clients: 4
+ Input rate cap: 1000000
+ Faults: 0 nodes
+ Signup execution time: 88 s
+ Prepare execution time: 137 s
+ Single sign percentage: 9,422 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 0 %
+ Brokerage timeout: 1000 ms
+ Reduction timeout: 1000 ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 3150000 
+ Number of prepare batches: 38 
+ Total number of TX (fast): 119700000 
+
+ + RESULTS:
+ Prepare TPS: 870,640 Prepare/s
+ Prepare end-to-end latency: 9,422 ms
+
+ Mean brokerage batch size: 33.3 %
+ Mean reduction percentage: 100.0 %
+
+ Prepare pre-compute latency: 2,611 ms
+ Total prepare batch processing latency: 728 ms
+ - batch correctness validate latency: 10 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 3 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 35,902 Signup/s
+ Signup latency: 5,615 ms
+ Id request processing latency: 233 ms
+ Id claim processing latency: 108 ms
+ Id assignments processing latency: 49 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 64
+ Number of fast brokers: 63
+ Number of full brokers: 1
+ Number of clients: 4
+ Input rate cap: 500000
+ Faults: 0 nodes
+ Signup execution time: 75 s
+ Prepare execution time: 132 s
+ Single sign percentage: 11,171 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 0 %
+ Brokerage timeout: 1000 ms
+ Reduction timeout: 1000 ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 3150000 
+ Number of prepare batches: 19 
+ Total number of TX (fast): 59850000 
+
+ + RESULTS:
+ Prepare TPS: 454,746 Prepare/s
+ Prepare end-to-end latency: 11,171 ms
+
+ Mean brokerage batch size: 40.0 %
+ Mean reduction percentage: 100.0 %
+
+ Prepare pre-compute latency: 1,332 ms
+ Total prepare batch processing latency: 583 ms
+ - batch correctness validate latency: 7 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 2 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 41,976 Signup/s
+ Signup latency: 5,255 ms
+ Id request processing latency: 309 ms
+ Id claim processing latency: 116 ms
+ Id assignments processing latency: 65 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 64
+ Number of fast brokers: 63
+ Number of full brokers: 1
+ Number of clients: 4
+ Input rate cap: 100000
+ Faults: 0 nodes
+ Signup execution time: 93 s
+ Prepare execution time: 111 s
+ Single sign percentage: 8,771 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 0 %
+ Brokerage timeout: 1000 ms
+ Reduction timeout: 1000 ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 3150000 
+ Number of prepare batches: 4 
+ Total number of TX (fast): 12600000 
+
+ + RESULTS:
+ Prepare TPS: 113,606 Prepare/s
+ Prepare end-to-end latency: 8,771 ms
+
+ Mean brokerage batch size: 33.3 %
+ Mean reduction percentage: 100.0 %
+
+ Prepare pre-compute latency: 318 ms
+ Total prepare batch processing latency: 644 ms
+ - batch correctness validate latency: 7 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 3 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 33,852 Signup/s
+ Signup latency: 5,934 ms
+ Id request processing latency: 155 ms
+ Id claim processing latency: 100 ms
+ Id assignments processing latency: 44 ms
+
+-----------------------------------------

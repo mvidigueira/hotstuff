@@ -1,0 +1,29 @@
+
+-----------------------------------------
+ RESULTS:
+-----------------------------------------
+ Number of replicas: 64
+ Number of brokers: 64
+ Input rate: any ops/s
+ Faults: 0 replicas
+
+ Variable value: X=113606
+ TPS: 113606 +/- 0 tx/s
+ Op Latency: 8771 +/- 0 ms
+
+ Variable value: X=454746
+ TPS: 454746 +/- 0 tx/s
+ Op Latency: 11171 +/- 0 ms
+
+ Variable value: X=870640
+ TPS: 870640 +/- 0 tx/s
+ Op Latency: 9422 +/- 0 ms
+
+ Variable value: X=1042294
+ TPS: 1042294 +/- 0 tx/s
+ Op Latency: 16458 +/- 0 ms
+
+ Variable value: X=1078910
+ TPS: 1078910 +/- 0 tx/s
+ Op Latency: 31618 +/- 0 ms
+-----------------------------------------

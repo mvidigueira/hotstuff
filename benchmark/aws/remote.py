@@ -52,7 +52,6 @@ class Bench:
         Print.info('Installing rust and cloning the repo...')
         cmd = [
             'sudo apt-get update',
-            'sudo echo "ulimit -n 200000" | tee -a ~/.bashrc',
             # 'sudo apt-get -y upgrade',
             # 'sudo apt-get -y autoremove',
 
@@ -167,6 +166,13 @@ class Bench:
             'sudo sysctl -w \'net.core.default_qdisc=fq\'',
             # recommended to enable 'fair queueing'
             'sudo sysctl -w \'net.core.default_qdisc=fq\'',
+            # increase tcp sockets,
+            'sudo sysctl -w \'net.core.somaxconn=500000\'',
+            'sudo sysctl -w \'net.core.netdev_max_backlog=20000\'',
+            'sudo sysctl -w \'net.ipv4.tcp_max_syn_backlog=20000\'',
+            'sudo sysctl -w \'net.ipv4.tcp_tw_reuse=1\'',
+            'sudo sysctl -w \'net.ipv4.tcp_fin_timeout=60\'',
+            
         ]
 
         cmd = [
@@ -210,7 +216,8 @@ class Bench:
         num_nodes = len(hosts)
         num_fast = len(fast_brokers)
         num_full = len(full_brokers)
-        self._start_rendezvous(hosts[0], num_nodes, num_fast, num_full)
+        num_clients = len(clients)
+        self._start_rendezvous(hosts[0], num_nodes, num_fast, num_full, num_clients)
 
         rendezvous_server = hosts[0] + ":9000"
 
@@ -286,7 +293,7 @@ class Bench:
             )
             self._background_run(client, cmd, log_file)
 
-        sleep_time = 80
+        sleep_time = 200
         interval = sleep_time / 20
         progress = progress_bar([interval] * 20, prefix='Waiting for the broker(s) to finish signup. Sleeping...')
         for i in progress:
@@ -294,7 +301,7 @@ class Bench:
 
         Print.info('Broker(s) expected to have finished signup.')
 
-        sleep_time = 60
+        sleep_time = 600
         interval = sleep_time / 20
         progress = progress_bar([interval] * 20, prefix='Waiting for the broker(s) to finish prepare. Sleeping...')
         for i in progress:
@@ -354,13 +361,47 @@ class Bench:
 
         return LogParser.process(PathMaker.logs_path(), faults=faults)
 
-    def _start_rendezvous(self, host, num_nodes, num_fast, num_full):
-        cmd = CommandMaker.run_rendezvous(num_nodes, num_fast, num_full)
+    def _start_rendezvous(self, host, num_nodes, num_fast, num_full, num_clients):
+        cmd = CommandMaker.run_rendezvous(num_nodes, num_fast, num_full, num_clients)
         log_file = PathMaker.rendezvous_log_file()
 
         self._background_run(host, cmd, log_file)
 
         return
+
+    def dl_logs(self, bench_parameters_dict, debug=False):
+        assert isinstance(debug, bool)
+        Print.heading('Starting logs download')
+        try:
+            bench_parameters = BenchParameters(bench_parameters_dict)
+        except ConfigError as e:
+            raise BenchError('Invalid nodes or bench parameters', e)
+
+        # Select which hosts to use.
+        (selected_hosts, selected_fast, selected_full, selected_clients) = self._select_hosts(bench_parameters)
+        if not selected_hosts:
+            return
+
+        # Run benchmarks.
+        n = sum(bench_parameters.nodes[0].values())
+        hosts = selected_hosts[0]
+
+        bfast = sum(bench_parameters.fast_brokers[0].values())
+        fast = selected_fast[0]
+
+        bfull = sum(bench_parameters.full_brokers[0].values())
+        full = selected_full[0]
+
+        b_clients = sum(bench_parameters.full_clients[0].values())
+        clients = selected_clients[0]
+
+        # Do not boot faulty nodes.
+        faults = bench_parameters.faults
+        
+        self._logs(hosts, fast, full, clients, faults).print(PathMaker.result_file(
+            n, bfast + bfull, b_clients, faults
+        ))
+            
 
     def run(self, bench_parameters_dict, node_parameters_dict, debug=False):
         assert isinstance(debug, bool)
@@ -390,6 +431,7 @@ class Bench:
 
         # Update nodes.
         try:
+            pass
             self._update(merged_hosts + merged_fast + merged_full + merged_clients)
         except (GroupException, ExecutionError) as e:
             e = FabricError(e) if isinstance(e, GroupException) else e
@@ -417,6 +459,7 @@ class Bench:
 
             # Upload all configuration files.
             try:
+                pass
                 self._config(hosts + fast + full + clients, node_parameters)
             except (subprocess.SubprocessError, GroupException) as e:
                 e = FabricError(e) if isinstance(e, GroupException) else e

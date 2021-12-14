@@ -82,8 +82,8 @@ class LogParser:
         return merged
 
     def _parse_fast_brokers(self, log):
-        if search(r'Error', log) is not None:
-            raise ParseError('Fast broker(s) panicked')
+        # if search(r'Error', log) is not None:
+        #     raise ParseError('Fast broker(s) panicked')
 
         rate = int(search(r'Rate limit: (\d+)', log).group(1))
         signup_batch_number = int(search(r'Signup batch number: (\d+)', log).group(1))

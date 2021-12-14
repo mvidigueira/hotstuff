@@ -33,10 +33,11 @@ class Setup:
     @classmethod
     def from_str(cls, raw):
         nodes = int(search(r'.* Number of replicas: (\d+)', raw).group(1))
-        brokers = int(search(r'.* Number of brokers: (\d+)', raw).group(1))
-        rate = int(search(r'.* Input rate: (\d+)', raw).group(1))
+        brokers = int(search(r'.* Number of fast brokers: (\d+)', raw).group(1))
+        full = int(search(r'.* Number of full brokers: (\d+)', raw).group(1))
+        rate = int(search(r'.* Input rate cap: (\d+)', raw).group(1))
         faults = int(search(r'.* Faults: (\d+)', raw).group(1))
-        return cls(nodes, brokers, rate, faults)
+        return cls(nodes, brokers + full, rate, faults)
 
 
 class Result:
@@ -55,7 +56,7 @@ class Result:
     @classmethod
     def from_str(cls, raw):
         tps = int(search(r'.* Prepare TPS: (\d+)', raw).group(1))
-        latency = int(search(r'.* Prepare latency: (\d+)', raw).group(1))
+        latency = int(search(r'.* Prepare end-to-end latency: (\d+)', raw).group(1))
         return cls(tps, latency)
 
     @classmethod

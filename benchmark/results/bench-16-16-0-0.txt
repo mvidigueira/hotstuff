@@ -1,0 +1,47 @@
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 16
+ Number of fast brokers: 16
+ Number of full brokers: 0
+ Number of clients: 0
+ Input rate cap: 1000000
+ Faults: 0 nodes
+ Signup execution time: 69 s
+ Prepare execution time: 43 s
+ Single sign percentage: 0 ms
+
+ Size of a prepare batch: 50000 
+ Percentage of single signatures: 100 %
+ Brokerage timeout: - ms
+ Reduction timeout: - ms
+
+ Number of signup batches: 10 
+ Size of a signup batch: 5000 
+ Total number of signups: 800000 
+ Number of prepare batches: 5 
+ Total number of TX (fast): 4000000 
+
+ + RESULTS:
+ Prepare TPS: 92,102 Prepare/s
+ Prepare end-to-end latency: 0 ms
+
+ Mean brokerage batch size: 0 %
+ Mean reduction percentage: 0 %
+
+ Prepare pre-compute latency: 386 ms
+ Total prepare batch processing latency: 2,268 ms
+ - batch correctness validate latency: 0 ms
+ - batch witness validate latency: 2 ms
+ - batch apply latency: 28 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 11,649 Signup/s
+ Signup latency: 3,751 ms
+ Id request processing latency: 39 ms
+ Id claim processing latency: 124 ms
+ Id assignments processing latency: 30 ms
+
+-----------------------------------------
