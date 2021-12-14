@@ -46,9 +46,19 @@ class PathMaker:
         return join(PathMaker.logs_path(), f'replica-{i}.log')
 
     @staticmethod
-    def broker_log_file(i):
+    def fast_broker_log_file(i):
         assert isinstance(i, int) and i >= 0
-        return join(PathMaker.logs_path(), f'broker-{i}.log')
+        return join(PathMaker.logs_path(), f'fast-broker-{i}.log')
+
+    @staticmethod
+    def full_broker_log_file(i):
+        assert isinstance(i, int) and i >= 0
+        return join(PathMaker.logs_path(), f'full-broker-{i}.log')
+
+    @staticmethod
+    def client_log_file(i):
+        assert isinstance(i, int) and i >= 0
+        return join(PathMaker.logs_path(), f'client-{i}.log')
 
     @staticmethod
     def rendezvous_log_file():
@@ -64,9 +74,9 @@ class PathMaker:
         return 'results'
 
     @staticmethod
-    def result_file(nodes, brokers, faults):
+    def result_file(nodes, brokers, clients, faults):
         return join(
-            PathMaker.results_path(), f'bench-{nodes}-{brokers}-{faults}.txt'
+            PathMaker.results_path(), f'bench-{nodes}-{brokers}-{clients}-{faults}.txt'
         )
 
     @staticmethod
@@ -74,10 +84,10 @@ class PathMaker:
         return 'plots'
 
     @staticmethod
-    def agg_file(type, nodes, rate, tx_size, faults, max_latency):
+    def agg_file(type, nodes, brokers, faults):
         return join(
             PathMaker.plots_path(),
-            f'{type}-{nodes}-{rate}-{tx_size}-{faults}-{max_latency}.txt'
+            f'{type}-{nodes}-{brokers}-{faults}.txt'
         )
 
     @staticmethod

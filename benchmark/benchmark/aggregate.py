@@ -10,20 +10,18 @@ from benchmark.utils import PathMaker
 
 
 class Setup:
-    def __init__(self, nodes, rate, tx_size, faults):
+    def __init__(self, nodes, brokers, rate, faults):
         self.nodes = nodes
+        self.brokers = brokers
         self.rate = rate
-        self.tx_size = tx_size
         self.faults = faults
-        self.max_latency = 'any'
 
     def __str__(self):
         return (
-            f' Committee size: {self.nodes} nodes\n'
-            f' Input rate: {self.rate} tx/s\n'
-            f' Transaction size: {self.tx_size} B\n'
-            f' Faults: {self.faults} nodes\n'
-            f' Max latency: {self.max_latency} ms\n'
+            f' Number of replicas: {self.nodes}\n'
+            f' Number of brokers: {self.brokers}\n'
+            f' Input rate: {self.rate} ops/s\n'
+            f' Faults: {self.faults} replicas\n'
         )
 
     def __eq__(self, other):
@@ -34,11 +32,11 @@ class Setup:
 
     @classmethod
     def from_str(cls, raw):
-        nodes = int(search(r'.* Committee size: (\d+)', raw).group(1))
+        nodes = int(search(r'.* Number of replicas: (\d+)', raw).group(1))
+        brokers = int(search(r'.* Number of brokers: (\d+)', raw).group(1))
         rate = int(search(r'.* Input rate: (\d+)', raw).group(1))
-        tx_size = int(search(r'.* Transaction size: (\d+)', raw).group(1))
         faults = int(search(r'.* Faults: (\d+)', raw).group(1))
-        return cls(nodes, rate, tx_size, faults)
+        return cls(nodes, brokers, rate, faults)
 
 
 class Result:
@@ -51,13 +49,13 @@ class Result:
     def __str__(self):
         return(
             f' TPS: {self.mean_tps} +/- {self.std_tps} tx/s\n'
-            f' Latency: {self.mean_latency} +/- {self.std_latency} ms\n'
+            f' Op Latency: {self.mean_latency} +/- {self.std_latency} ms\n'
         )
 
     @classmethod
     def from_str(cls, raw):
-        tps = int(search(r'.* End-to-end TPS: (\d+)', raw).group(1))
-        latency = int(search(r'.* End-to-end latency: (\d+)', raw).group(1))
+        tps = int(search(r'.* Prepare TPS: (\d+)', raw).group(1))
+        latency = int(search(r'.* Prepare latency: (\d+)', raw).group(1))
         return cls(tps, latency)
 
     @classmethod
@@ -73,12 +71,7 @@ class Result:
 
 
 class LogAggregator:
-    def __init__(self, max_latencies):
-        assert isinstance(max_latencies, list)
-        assert all(isinstance(x, int) for x in max_latencies)
-
-        self.max_latencies = max_latencies
-
+    def __init__(self):
         data = ''
         for filename in glob(join(PathMaker.results_path(), '*.txt')):
             with open(filename, 'r') as f:
@@ -96,7 +89,7 @@ class LogAggregator:
             os.makedirs(PathMaker.plots_path())
 
         results = [
-            self._print_latency(), self._print_tps(), self._print_robustness()
+            self._print_latency()
         ]
         for name, records in results:
             for setup, values in records.items():
@@ -116,10 +109,8 @@ class LogAggregator:
                 filename = PathMaker.agg_file(
                     name,
                     setup.nodes, 
-                    setup.rate, 
-                    setup.tx_size, 
+                    setup.brokers,
                     setup.faults,
-                    max_latency=setup.max_latency
                 )
                 with open(filename, 'w') as f:
                     f.write(string)

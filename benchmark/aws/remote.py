@@ -5,8 +5,6 @@ from paramiko import RSAKey
 from paramiko.ssh_exception import PasswordRequiredException, SSHException
 from os.path import basename, splitext
 from time import sleep
-from math import ceil
-from os.path import join
 import subprocess
 
 from benchmark.config import NodeParameters, BenchParameters, ConfigError
@@ -54,12 +52,14 @@ class Bench:
         Print.info('Installing rust and cloning the repo...')
         cmd = [
             'sudo apt-get update',
-            'sudo apt-get -y upgrade',
-            'sudo apt-get -y autoremove',
+            'sudo echo "ulimit -n 200000" | tee -a ~/.bashrc',
+            # 'sudo apt-get -y upgrade',
+            # 'sudo apt-get -y autoremove',
 
             # The following dependencies prevent the error: [error: linker `cc` not found].
             'sudo apt-get -y install build-essential',
             'sudo apt-get -y install cmake',
+            'sudo apt-get -y install tmux',
 
             # Install rust (non-interactive).
             'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y',
@@ -94,36 +94,57 @@ class Bench:
         # Ensure there are enough hosts.
         selected = []
         fast = []
+        full = []
+        clients = []
 
         hosts = self.manager.hosts()
 
-        for run in bench_parameters.nodes:
+        Print.info(str({region: len(ips) for (region, ips) in hosts.items()}))
+
+        for config in bench_parameters.nodes:
             run_hosts = []
             run_fast = []
-            for region, number in run.items():
+            run_full = []
+            run_clients = []
+            for region, number in config.items():
                 num_fast = bench_parameters.fast_brokers[0].get(region, 0)
+                num_full = bench_parameters.full_brokers[0].get(region, 0)
+                num_clients = bench_parameters.full_clients[0].get(region, 0)
 
                 if region in hosts:
                     ips = hosts[region]
-                    if len(ips) >= number + num_fast:
+                    if len(ips) >= number + num_fast + num_full + num_clients:
                         run_hosts += ips[:number]
                         run_fast += ips[number:number+num_fast]
+                        run_full += ips[number+num_fast:number+num_fast+num_full]
+                        run_clients += ips[number+num_fast+num_full:number+num_fast+num_full+num_clients]
                     else:
-                        Print.warn('Only ' + len(ips) + ' out of ' + number  + '+' + num_fast + ' (replicas + fast brokers) instances available in region \'' + region + "\'")
+                        Print.warn('Only ' + str(len(ips)) + ' out of ' + str(number) +\
+                             '+' + str(num_fast) + '+' + str(num_full) + '+' + str(num_clients) \
+                                 + ' (replicas + fast + full + clients) instances available in region \'' + region + "\'")
                         return ([], [])
                 else:
                     Print.warn('Region \'' + region + "\' is not included in the list of hosts (check settings.json)")
                     return ([], [])
             selected.append(run_hosts)
             fast.append(run_fast)
+            full.append(run_full)
+            clients.append(run_clients)
             
-        return (selected, fast)
+        return (selected, fast, full, clients)
 
     def _background_run(self, host, command, log_file):
         name = splitext(basename(log_file))[0]
         cmd = f'tmux new -d -s "{name}" "{command} |& tee {log_file}"'
         c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
         output = c.run(cmd, hide=True)
+        self._check_stderr(output)
+
+    def _background_run_multiple(self, hosts, command, log_file):
+        name = splitext(basename(log_file))[0]
+        cmd = f'tmux new -d -s "{name}" "{command} |& tee {log_file}"'
+        g = Group(*hosts, user='ubuntu', connect_kwargs=self.connect)
+        output = g.run(cmd, hide=True)
         self._check_stderr(output)
 
     def _update(self, hosts):
@@ -142,6 +163,8 @@ class Bench:
             'sudo sysctl -w \'net.ipv4.tcp_congestion_control=htcp\'',
             # recommended for hosts with jumbo frames enabled
             'sudo sysctl -w \'net.ipv4.tcp_mtu_probing=1\'',
+            # recommended to enable 'fair queueing'
+            'sudo sysctl -w \'net.core.default_qdisc=fq\'',
             # recommended to enable 'fair queueing'
             'sudo sysctl -w \'net.core.default_qdisc=fq\'',
         ]
@@ -170,66 +193,118 @@ class Bench:
         g.run(cmd, hide=True)
 
         node_parameters.print(PathMaker.parameters_file())
-        
-        # Upload configuration files.
-        progress = progress_bar(hosts, prefix='Uploading config files:')
-        for host in progress:
-            c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
-            c.put(PathMaker.parameters_file(), '.')
+        Print.info('Uploading config files...')
+        g.put(PathMaker.parameters_file(), '.')
 
         return
 
-    def _run_single(self, hosts, brokers, rate, bench_parameters, debug=False):
+    def _run_single(self, hosts, fast_brokers, full_brokers, clients, rate, debug=False):
         Print.info('Booting testbed...')
 
         # Kill any potentially unfinished run and delete logs.
-        self.kill(hosts=hosts, delete_logs=True)
-        self.kill(hosts=brokers, delete_logs=True)
+        self.kill(hosts=hosts + fast_brokers + full_brokers + clients, delete_logs=True)
 
         Print.info('Starting rendezvous server...')
 
         # Run the rendezvous server
         num_nodes = len(hosts)
-        num_brokers = len(brokers)
-        self._start_rendezvous(hosts[0], num_nodes, num_brokers)
+        num_fast = len(fast_brokers)
+        num_full = len(full_brokers)
+        self._start_rendezvous(hosts[0], num_nodes, num_fast, num_full)
 
         rendezvous_server = hosts[0] + ":9000"
 
         Print.info('Rendezvous server: ' + rendezvous_server)
 
+        Print.info('Starting the nodes...')
+
         # Run the nodes.
-        node_logs = [PathMaker.node_log_file(i) for i in range(len(hosts))]
-        for host, log_file in zip(hosts, node_logs):
-            cmd = CommandMaker.run_node(
+        # node_logs = [PathMaker.node_log_file(i) for i in range(len(hosts))]
+        # for host, log_file in zip(hosts, node_logs):
+        #     cmd = CommandMaker.run_node(
+        #         rendezvous = rendezvous_server,
+        #         discovery = rendezvous_server,
+        #         parameters = PathMaker.parameters_file(),
+        #         debug=debug
+        #     )
+        #     self._background_run(host, cmd, log_file)
+
+        log_file = PathMaker.node_log_file(0)
+        cmd = CommandMaker.run_node(
                 rendezvous = rendezvous_server,
                 discovery = rendezvous_server,
                 parameters = PathMaker.parameters_file(),
                 debug=debug
             )
-            self._background_run(host, cmd, log_file)
+        self._background_run_multiple(hosts, cmd, log_file)
 
         # Wait for the nodes to synchronize
         Print.info('Waiting for the nodes to synchronize...')
         sleep(10)
         Print.info('Starting the broker(s)...')
 
-        # Run the brokers
-        broker_logs = [PathMaker.broker_log_file(i) for i in range(len(brokers))]
-        for broker, log_file in zip(brokers, broker_logs):
+        # Run the fast brokers
+        # fast_broker_logs = [PathMaker.fast_broker_log_file(i) for i in range(len(fast_brokers))]
+        # for broker, log_file in zip(fast_brokers, fast_broker_logs):
+        #     cmd = CommandMaker.run_broker(
+        #         rendezvous = rendezvous_server,
+        #         parameters = PathMaker.parameters_file(),
+        #         rate = rate,
+        #         debug=debug
+        #     )
+        #     self._background_run(broker, cmd, log_file)
+
+        log_file = PathMaker.fast_broker_log_file(0)
+        cmd = CommandMaker.run_broker(
+                rendezvous = rendezvous_server,
+                parameters = PathMaker.parameters_file(),
+                rate = rate,
+                debug=debug
+            )
+        self._background_run_multiple(fast_brokers, cmd, log_file)
+
+        # Run the full brokers
+        full_broker_logs = [PathMaker.full_broker_log_file(i) for i in range(len(full_brokers))]
+        for broker, log_file in zip(full_brokers, full_broker_logs):
             cmd = CommandMaker.run_broker(
                 rendezvous = rendezvous_server,
                 parameters = PathMaker.parameters_file(),
+                rate = rate,
+                full=True,
                 debug=debug
             )
             self._background_run(broker, cmd, log_file)
 
-        Print.info('Waiting for the broker(s) to finish...')
-        sleep(40)
+        # Run the clients 
+        client_logs = [PathMaker.client_log_file(i) for i in range(len(clients))]
+        for client, log_file in zip(clients, client_logs):
+            cmd = CommandMaker.run_client(
+                rendezvous = rendezvous_server,
+                parameters = PathMaker.parameters_file(),
+                num_clients = len(clients),
+                debug=debug
+            )
+            self._background_run(client, cmd, log_file)
 
-        self.kill(hosts=hosts, delete_logs=False)
-        self.kill(hosts=brokers, delete_logs=False)
+        sleep_time = 80
+        interval = sleep_time / 20
+        progress = progress_bar([interval] * 20, prefix='Waiting for the broker(s) to finish signup. Sleeping...')
+        for i in progress:
+            sleep(i)
 
-    def _logs(self, hosts, brokers, faults):
+        Print.info('Broker(s) expected to have finished signup.')
+
+        sleep_time = 60
+        interval = sleep_time / 20
+        progress = progress_bar([interval] * 20, prefix='Waiting for the broker(s) to finish prepare. Sleeping...')
+        for i in progress:
+            sleep(i)
+
+        Print.info('Killing nodes...')
+
+        self.kill(hosts=hosts + fast_brokers + full_brokers + clients, delete_logs=False)
+
+    def _logs(self, hosts, fast_brokers, full_brokers, clients, faults):
         # Delete local logs (if any).
         cmd = CommandMaker.clean_logs()
         subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
@@ -239,25 +314,48 @@ class Bench:
         c = Connection(hosts[0], user='ubuntu', connect_kwargs=self.connect)
         c.get(PathMaker.rendezvous_log_file(), local=PathMaker.rendezvous_log_file())
 
-        # Download log files.
-        progress = progress_bar(brokers, prefix='Downloading broker logs:')
-        for i, host in enumerate(progress):
-            c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
-            c.get(PathMaker.broker_log_file(i), local=PathMaker.broker_log_file(i))
+        # Download fast broker log files.
+        if fast_brokers:
+            progress = progress_bar(fast_brokers, prefix='Downloading fast broker logs:')
+            for (i, fast_broker) in enumerate(progress):
+                cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
+                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + fast_broker + ':' \
+                         + PathMaker.fast_broker_log_file(0) + " " + PathMaker.fast_broker_log_file(i) + " & "
+                subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
 
-        # Download log files.
-        progress = progress_bar(hosts, prefix='Downloading replica logs:')
-        for i, host in enumerate(progress):
-            c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
-            c.get(PathMaker.node_log_file(i), local=PathMaker.node_log_file(i))
+        # Download full broker log files.
+        if full_brokers:
+            progress = progress_bar(full_brokers, prefix='Downloading fast broker logs:')
+            for (i, full_broker) in enumerate(progress):
+                cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
+                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + full_broker + ':' \
+                         + PathMaker.full_broker_log_file(0) + " " + PathMaker.full_broker_log_file(i) + " & "
+                subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
+
+        # Download client log files.
+        if clients:
+            progress = progress_bar(clients, prefix='Downloading client logs:')
+            for i, host in enumerate(progress):
+                c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
+                c.get(PathMaker.client_log_file(i), local=PathMaker.client_log_file(i))
+
+        # Download replica log files.
+        progress = progress_bar(hosts, prefix='Downloading fast broker logs:')
+        for (i, host) in enumerate(progress):
+            cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
+                    -i ' + self.manager.settings.key_path + ' -C ubuntu@' + host + ':' \
+                        + PathMaker.node_log_file(0) + " " + PathMaker.node_log_file(i) + " & "
+            subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
+
+        sleep(5)
 
         # Parse logs and return the parser.
         Print.info('All logs downloaded!')
 
         return LogParser.process(PathMaker.logs_path(), faults=faults)
 
-    def _start_rendezvous(self, host, num_nodes, num_brokers):
-        cmd = CommandMaker.run_rendezvous(num_nodes, num_brokers)
+    def _start_rendezvous(self, host, num_nodes, num_fast, num_full):
+        cmd = CommandMaker.run_rendezvous(num_nodes, num_fast, num_full)
         log_file = PathMaker.rendezvous_log_file()
 
         self._background_run(host, cmd, log_file)
@@ -274,59 +372,74 @@ class Bench:
             raise BenchError('Invalid nodes or bench parameters', e)
 
         # Select which hosts to use.
-        (selected_hosts, selected_brokers) = self._select_hosts(bench_parameters)
+        (selected_hosts, selected_fast, selected_full, selected_clients) = self._select_hosts(bench_parameters)
         if not selected_hosts:
             return
+    
+        Print.heading('selected_full: ' + str(selected_full))
 
         merged_hosts = list(set.union(*[set(x) for x in selected_hosts]))
-        merged_brokers = list(set.union(*[set(x) for x in selected_brokers]))
+        merged_fast = list(set.union(*[set(x) for x in selected_fast]))
+        merged_full = list(set.union(*[set(x) for x in selected_full]))
+        merged_clients = list(set.union(*[set(x) for x in selected_clients]))
 
         Print.heading('Merged hosts: ' + str(merged_hosts))
-        Print.heading('Merged brokers: ' + str(merged_brokers))
+        Print.heading('Merged fast brokers: ' + str(merged_fast))
+        Print.heading('Merged full brokers: ' + str(merged_full))
+        Print.heading('Merged clients: ' + str(merged_clients))
 
         # Update nodes.
         try:
-            self._update(merged_hosts + merged_brokers)
+            self._update(merged_hosts + merged_fast + merged_full + merged_clients)
         except (GroupException, ExecutionError) as e:
             e = FabricError(e) if isinstance(e, GroupException) else e
             raise BenchError('Failed to update nodes', e)
 
         # Run benchmarks.
         for i, nodes in enumerate(bench_parameters.nodes):
-            for r in bench_parameters.rate:
-                n = sum(nodes.values())
-                Print.heading(f'\nRunning {n} nodes (input rate: {r:,} tx/s)')
-                hosts = selected_hosts[i]
+            n = sum(nodes.values())
+            Print.heading(f'\nRunning {n} nodes')
+            hosts = selected_hosts[i]
 
-                b = sum(bench_parameters.fast_brokers[0].values())
-                Print.heading(f'\nRunning {b} fast brokers')
-                brokers = selected_brokers[i]
+            bfast = sum(bench_parameters.fast_brokers[0].values())
+            Print.heading(f'\nRunning {bfast} fast broker(s)')
+            fast = selected_fast[i]
 
-                # Upload all configuration files.
+            bfull = sum(bench_parameters.full_brokers[0].values())
+            Print.heading(f'\nRunning {bfull} full broker(s)')
+            full = selected_full[i]
+
+            b_clients = sum(bench_parameters.full_clients[0].values())
+            Print.heading(f'\nRunning {b_clients} client(s)')
+            clients = selected_clients[i]
+
+            rate = bench_parameters.rate
+
+            # Upload all configuration files.
+            try:
+                self._config(hosts + fast + full + clients, node_parameters)
+            except (subprocess.SubprocessError, GroupException) as e:
+                e = FabricError(e) if isinstance(e, GroupException) else e
+                Print.error(BenchError('Failed to configure nodes', e))
+                continue
+
+            # Do not boot faulty nodes.
+            faults = bench_parameters.faults
+            hosts = hosts[:n-faults]
+
+            # Run the benchmark.
+            for i in range(bench_parameters.runs):
+                Print.heading(f'Run {i+1}/{bench_parameters.runs}')
                 try:
-                    self._config(hosts + brokers, node_parameters)
-                except (subprocess.SubprocessError, GroupException) as e:
-                    e = FabricError(e) if isinstance(e, GroupException) else e
-                    Print.error(BenchError('Failed to configure nodes', e))
+                    self._run_single(
+                        hosts, fast, full, clients, rate, debug
+                    )
+                    self._logs(hosts, fast, full, clients, faults).print(PathMaker.result_file(
+                        n, bfast + bfull, b_clients, faults
+                    ))
+                except (subprocess.SubprocessError, GroupException, ParseError) as e:
+                    self.kill(hosts=hosts + fast + full + clients)
+                    if isinstance(e, GroupException):
+                        e = FabricError(e)
+                    Print.error(BenchError('Benchmark failed', e))
                     continue
-
-                # Do not boot faulty nodes.
-                faults = bench_parameters.faults
-                hosts = hosts[:n-faults]
-
-                # Run the benchmark.
-                for i in range(bench_parameters.runs):
-                    Print.heading(f'Run {i+1}/{bench_parameters.runs}')
-                    try:
-                        self._run_single(
-                            hosts, brokers, r, bench_parameters, debug
-                        )
-                        self._logs(hosts, brokers, faults).print(PathMaker.result_file(
-                            n, b, faults
-                        ))
-                    except (subprocess.SubprocessError, GroupException, ParseError) as e:
-                        self.kill(hosts=hosts)
-                        if isinstance(e, GroupException):
-                            e = FabricError(e)
-                        Print.error(BenchError('Benchmark failed', e))
-                        continue

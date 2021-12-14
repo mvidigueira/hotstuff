@@ -1,0 +1,148 @@
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 36
+ Number of brokers: 36
+ Input rate: 36,000,000 op/s
+ Faults: 0 nodes
+ Signup execution time: 99 s
+ Prepare execution time: 8 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 3600000 
+ Number of prepare batches: 10 
+ Size of a prepare batch: 100000 
+ Precentage of single signatures: 0 %
+ Total number of TX: 36000000 
+
+ + RESULTS:
+ Prepare TPS: 4,238,785 Prepare/s
+ Prepare latency: 6,126 ms
+ Prepare pre-compute latency: 1,334 ms
+ Total prepare batch processing latency: 1,679 ms
+ - batch correctness validate latency: 46 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 8 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 36,477 Signup/s
+ Signup latency: 14,179 ms
+ Id request processing latency: 352 ms
+ Id claim processing latency: 266 ms
+ Id assignments processing latency: 142 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 36
+ Number of brokers: 36
+ Input rate: 36,000,000 op/s
+ Faults: 0 nodes
+ Signup execution time: 103 s
+ Prepare execution time: 9 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 3600000 
+ Number of prepare batches: 20 
+ Size of a prepare batch: 50000 
+ Precentage of single signatures: 0 %
+ Total number of TX: 36000000 
+
+ + RESULTS:
+ Prepare TPS: 4,141,263 Prepare/s
+ Prepare latency: 5,975 ms
+ Prepare pre-compute latency: 1,339 ms
+ Total prepare batch processing latency: 1,547 ms
+ - batch correctness validate latency: 14 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 4 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 35,029 Signup/s
+ Signup latency: 15,342 ms
+ Id request processing latency: 255 ms
+ Id claim processing latency: 187 ms
+ Id assignments processing latency: 95 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 36
+ Number of brokers: 36
+ Input rate: 2,000 op/s
+ Faults: 0 nodes
+ Signup execution time: 103 s
+ Prepare execution time: 9 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 3600000 
+ Number of prepare batches: 20 
+ Size of a prepare batch: 50000 
+ Precentage of single signatures: 0 %
+ Total number of TX: 36000000 
+
+ + RESULTS:
+ Prepare TPS: 1,263 Prepare/s
+ Prepare latency: 975 ms
+ Prepare pre-compute latency: 1,339 ms
+ Total prepare batch processing latency: 1,547 ms
+ - batch correctness validate latency: 14 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 4 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 35,029 Signup/s
+ Signup latency: 15,342 ms
+ Id request processing latency: 255 ms
+ Id claim processing latency: 187 ms
+ Id assignments processing latency: 95 ms
+
+-----------------------------------------
+
+-----------------------------------------
+ SUMMARY:
+-----------------------------------------
+ + CONFIG:
+ Number of replicas: 36
+ Number of brokers: 36
+ Input rate: 2,000 op/s
+ Faults: 0 nodes
+ Signup execution time: 103 s
+ Prepare execution time: 9 s
+
+ Number of signup batches: 20 
+ Size of a signup batch: 5000 
+ Total number of signups: 3600000 
+ Number of prepare batches: 20 
+ Size of a prepare batch: 50000 
+ Precentage of single signatures: 0 %
+ Total number of TX: 36000000 
+
+ + RESULTS:
+ Prepare TPS: 1,000 Prepare/s
+ Prepare latency: 800 ms
+ Prepare pre-compute latency: 1,339 ms
+ Total prepare batch processing latency: 1,547 ms
+ - batch correctness validate latency: 14 ms
+ - batch witness validate latency: 1 ms
+ - batch apply latency: 4 ms
+ Total prepare commits processing latency: 0 ms
+
+ Signup TPS: 35,029 Signup/s
+ Signup latency: 15,342 ms
+ Id request processing latency: 255 ms
+ Id claim processing latency: 187 ms
+ Id assignments processing latency: 95 ms
+
+-----------------------------------------

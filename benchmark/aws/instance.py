@@ -93,9 +93,13 @@ class InstanceManager:
         # The AMI changes with regions.
         response = client.describe_images(
             Filters=[{
-                'Name': 'description',
-                'Values': ['Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2020-10-26']
+                'Name': 'name',
+                'Values': ['minion-osdi22']
             }]
+            # Filters=[{
+            #     'Name': 'description',
+            #     'Values': ['Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2020-10-26']
+            # }]
         )
         # ['Canonical, Ubuntu, 20.04 LTS, arm64 focal image build on 2020-07-01']
         return response['Images'][0]['ImageId']

@@ -13,6 +13,8 @@ class NodeParameters:
             inputs += [json['broker']['prepare_batch_size']]
             inputs += [json['broker']['prepare_batch_number']]
             inputs += [json['broker']['prepare_single_sign_percentage']]
+            inputs += [json['broker']['brokerage_timeout']]
+            inputs += [json['broker']['reduction_timeout']]
         except KeyError as e:
             raise ConfigError(f'Malformed parameters: missing key {e}')
 
@@ -51,13 +53,33 @@ class BenchParameters:
             if len(self.fast_brokers) != 1:
                 raise ConfigError('The number of fast brokers cannot change between runs')
 
-            rate = json['rate'] 
-            rate = rate if isinstance(rate, list) else [rate]
-            if not rate:
-                raise ConfigError('Missing input rate')
+            full_brokers = json['full_brokers'] 
+            full_brokers = full_brokers if isinstance(full_brokers, list) else [full_brokers]
 
-            self.rate = [int(x) for x in rate]
-            self.tx_size = int(json['tx_size'])
+            if not full_brokers:
+                self.full_brokers = [dict()]
+            else:
+                if any(any(y < 1 for y in x.values()) for x in full_brokers):
+                    raise ConfigError('Missing or invalid number of full_brokers')
+                self.full_brokers = [{y: int(x[y]) for y in x} for x in full_brokers]
+
+            if len(self.full_brokers) != 1:
+                raise ConfigError('The number of full brokers cannot change between runs')
+
+            full_clients = json['full_clients'] 
+            full_clients = full_clients if isinstance(full_clients, list) else [full_clients]
+
+            if not full_clients:
+                self.full_clients = [dict()]
+            else:
+                if any(any(y < 1 for y in x.values()) for x in full_clients):
+                    raise ConfigError('Missing or invalid number of full_brokers')
+                self.full_clients = [{y: int(x[y]) for y in x} for x in full_clients]
+
+            if len(self.full_clients) != 1:
+                raise ConfigError('The number of full brokers cannot change between runs')
+
+            self.rate = int(json['rate'])
             self.faults = int(json['faults'])
             self.duration = int(json['duration'])
             self.runs = int(json['runs']) if 'runs' in json else 1
@@ -80,17 +102,15 @@ class PlotParameters:
                 raise ConfigError('Missing number of nodes')
             self.nodes = [int(x) for x in nodes]
 
-            self.tx_size = int(json['tx_size'])
+            brokers = json['brokers'] 
+            brokers = brokers if isinstance(brokers, list) else [brokers]
+            if not brokers:
+                raise ConfigError('Missing number of nodes')
+            self.brokers = [int(x) for x in brokers]
 
             faults = json['faults'] 
             faults = faults if isinstance(faults, list) else [faults]
             self.faults = [int(x) for x in faults] if faults else [0]
-
-            max_lat = json['max_latency'] 
-            max_lat = max_lat if isinstance(max_lat, list) else [max_lat]
-            if not max_lat:
-                raise ConfigError('Missing max latency')
-            self.max_latency = [int(x) for x in max_lat]
 
         except KeyError as e:
             raise ConfigError(f'Malformed bench parameters: missing key {e}')
