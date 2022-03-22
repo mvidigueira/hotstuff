@@ -16,6 +16,10 @@ class CommandMaker:
         return f'rm -r {PathMaker.logs_path()} ; mkdir -p {PathMaker.logs_path()}'
 
     @staticmethod
+    def update(branch):
+        return f'git fetch ; git checkout {branch}'
+
+    @staticmethod
     def compile():
         return 'cargo build --quiet --release --features benchmark'
 
@@ -26,7 +30,7 @@ class CommandMaker:
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'ulimit -n 1000000 && ./replica {v} run --rendezvous {rendezvous} --discovery {discovery} '
+        return (f'./replica {v} run --rendezvous {rendezvous} --discovery {discovery} '
                 f' --parameters {parameters}')
 
     @staticmethod
@@ -36,7 +40,7 @@ class CommandMaker:
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
         full = '--full=true' if full else '--full=false'
-        return (f'ulimit -n 1000000 && ./broker {v} run --rendezvous {rendezvous} ' + full +
+        return (f'./broker {v} run --rendezvous {rendezvous} ' + full +
                 f' --parameters {parameters} --rate {rate}')
 
     @staticmethod
@@ -44,13 +48,16 @@ class CommandMaker:
         assert isinstance(rendezvous, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'ulimit -n 1000000 && ./client {v} run --rendezvous {rendezvous}' +\
+        return (f'./client {v} run --rendezvous {rendezvous}' +\
                 f' --parameters {parameters} --num_clients {num_clients}')
 
     @staticmethod
-    def run_rendezvous(num_nodes, num_fast, num_full, num_clients):
+    def run_rendezvous(num_nodes, num_fast, num_full, num_clients, local=False):
         assert isinstance(num_nodes, int)
-        return f'ulimit -n 1000000 && ./rendezvous -vv run --size {num_nodes} --fast_brokers {num_fast} --full_brokers {num_full} --num_clients {num_clients}'
+        assert isinstance(num_fast, int)
+        assert isinstance(num_full, int)
+        assert isinstance(num_clients, int)
+        return f'./rendezvous -vv run --size {num_nodes} --fast_brokers {num_fast} --full_brokers {num_full} --num_clients {num_clients} --local {local}'
 
     @staticmethod
     def kill():

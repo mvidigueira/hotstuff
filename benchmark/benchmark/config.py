@@ -80,7 +80,6 @@ class BenchParameters:
                 raise ConfigError('The number of full brokers cannot change between runs')
 
             self.rate = int(json['rate'])
-            self.faults = int(json['faults'])
             self.duration = int(json['duration'])
             self.runs = int(json['runs']) if 'runs' in json else 1
         except KeyError as e:
@@ -88,9 +87,6 @@ class BenchParameters:
 
         except ValueError:
             raise ConfigError('Invalid parameters type')
-
-        if any(min(x.values()) <= self.faults for x in self.nodes):
-            raise ConfigError('There should be more nodes than faults')
 
 
 class PlotParameters:

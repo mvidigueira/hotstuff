@@ -11,12 +11,12 @@ class BenchError(Exception):
 
 class PathMaker:
     @staticmethod
-    def binary_path():
-        return join('..', 'target', 'release')
+    def binary_path(repo_name):
+        return join('.', f'{repo_name}', 'target', 'release')
 
     @staticmethod
-    def node_crate_path():
-        return '.'
+    def node_crate_path(repo_name):
+        return f'./repo/{repo_name}'
 
     @staticmethod
     def committee_file():
