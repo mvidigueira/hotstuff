@@ -8,6 +8,9 @@ from benchmark.config import NodeParameters, ConfigError
 from benchmark.logs import LogParser, ParseError
 from benchmark.utils import Print, BenchError, PathMaker
 
+from re import search
+from glob import glob
+
 def _load_repo_settings(filename):
     try:
         with open(filename, 'r') as f:
@@ -58,6 +61,25 @@ class LocalBench:
     def logs():
         return LogParser.process(join('repo', PathMaker.logs_path()))
 
+    def _benchmark_done(self):
+        return (self.full_clients == 0 or self._clients_done()) and (self.fast_brokers == 0 or self._fast_brokers_done())
+
+    
+    def _fast_brokers_done(self):
+        logs = []
+        for filename in sorted(glob(join("repo", "logs", 'fast-broker-*.log'))):
+            with open(filename, 'r') as f:
+                logs += [f.read()]
+
+        return len(logs) != 0 and all([search(r'All transactions completed!', log) is not None for log in logs])
+
+    def _clients_done(self):
+        logs = []
+        for filename in sorted(glob(join("repo", "logs", 'client-*.log'))):
+            with open(filename, 'r') as f:
+                logs += [f.read()]
+        return len(logs) != 0 and all([search(r'Client done!', log) is not None for log in logs])
+
     def run(self, debug=False):
         assert isinstance(debug, bool)
         Print.heading('Starting local benchmark')
@@ -79,10 +101,14 @@ class LocalBench:
             # Recompile the latest code.
             cmd = CommandMaker.compile()
             subprocess.run([cmd], shell=True, cwd=PathMaker.node_crate_path(self.repo_name))
+            
+            sleep(1)
 
             # Create alias for the client and nodes binary.
             cmd = CommandMaker.alias_binaries(PathMaker.binary_path(self.repo_name))
             subprocess.run([cmd], shell=True, cwd='./repo')
+
+            sleep(1)
 
             self.node_parameters.print(join("./repo", PathMaker.parameters_file()))
 
@@ -156,14 +182,21 @@ class LocalBench:
                 )
                 self._background_run(cmd, log_file)
 
-            # Wait for the nodes to synchronize
-            Print.info('Waiting for the nodes to synchronize...')
-            sleep(10)
+            log_file = PathMaker.dstat_file(0)
+            cmd = CommandMaker.run_dstat()
+            self._background_run(cmd, log_file)
 
             # Wait for all transactions to be processed.
             Print.info(f'Running benchmark ({self.duration} sec)...')
-            sleep(self.duration)
+            for i in range(0, self.duration, 5):
+                if self._benchmark_done():
+                    Print.info(f'All brokers/clients done! Benchmark finished in {i} seconds.')
+                    break
+                sleep(5)
             self._kill_nodes()
+
+            if not self._benchmark_done():
+                Print.info(f'Some brokers/clients did not finish! Benchmark terminated in {self.duration} seconds.')
 
             # Parse logs and return the parser.
             Print.info('Parsing logs...')

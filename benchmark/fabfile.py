@@ -1,7 +1,9 @@
 from fabric import task
 
+from os.path import join
+
 from benchmark.logs import ParseError, LogParser
-from benchmark.utils import Print
+from benchmark.utils import Print, PathMaker
 from benchmark.plot import Ploter, PlotError
 from benchmark.local import LocalBench
 from configurations.presets import remote_bench_parameters, remote_node_parameters, creation_nodes
@@ -13,11 +15,11 @@ def local(ctx):
     ''' Run benchmarks on localhost '''
     bench_params = {
         'nodes': 4,
-        'fast_brokers': 4,
-        'full_brokers': 0,
-        'full_clients': 0,
+        'fast_brokers': 0,
+        'full_brokers': 1,
+        'full_clients': 2,
         'rate': 1_000_000,
-        'duration': 300,
+        'duration': 600,
         'runs': 1,
     }
 
@@ -27,7 +29,7 @@ def local(ctx):
             'signup_batch_size': 5000,
             'prepare_batch_size': 50000,
             'prepare_batch_number': 5,
-            'prepare_single_sign_percentage': 100,
+            'prepare_single_sign_percentage': 0,
             'brokerage_timeout': 1000, # millis
             'reduction_timeout': 1000, # millis
         },
@@ -39,31 +41,9 @@ def local(ctx):
         Print.error(e)
 
 @task
-def local_logs(ctx):
-    ''' Run benchmarks on localhost '''
-    bench_params = {
-        'nodes': 4,
-        'fast_brokers': 4,
-        'full_brokers': 0,
-        'full_clients': 0,
-        'rate': 1_000_000,
-        'duration': 300,
-        'runs': 1,
-    }
-
-    node_params = {
-        'broker': {
-            'signup_batch_number': 10,
-            'signup_batch_size': 5000,
-            'prepare_batch_size': 50000,
-            'prepare_batch_number': 5,
-            'prepare_single_sign_percentage': 100,
-            'brokerage_timeout': 1000, # millis
-            'reduction_timeout': 1000, # millis
-        },
-    }
+def locallogs(ctx):
     try:
-        ret = LocalBench(bench_params, node_params).logs()
+        ret = LogParser.process(join('repo', PathMaker.logs_path())).result()
         print(ret)
     except BenchError as e:
         Print.error(e)  

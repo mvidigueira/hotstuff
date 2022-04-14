@@ -24,6 +24,10 @@ class CommandMaker:
         return 'cargo build --quiet --release --features benchmark'
 
     @staticmethod
+    def run_dstat():
+        return f'dstat -t -T -cdnm --io' # --output {file} 1 > /dev/null
+
+    @staticmethod
     def run_node(rendezvous, discovery, parameters, debug=False):
         assert isinstance(rendezvous, str)
         assert isinstance(discovery, str)

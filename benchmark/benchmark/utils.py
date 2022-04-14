@@ -70,6 +70,11 @@ class PathMaker:
         return join(PathMaker.logs_path(), f'client-{i}.log')
 
     @staticmethod
+    def dstat_file(i):
+        assert isinstance(i, int) and i >= 0
+        return join(PathMaker.logs_path(), f'dstat-{i}.log')
+
+    @staticmethod
     def results_path():
         return 'results'
 
