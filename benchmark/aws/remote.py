@@ -90,47 +90,50 @@ class Bench:
             raise BenchError('Failed to kill nodes', FabricError(e))
 
     def _select_hosts(self, bench_parameters):
-        # Ensure there are enough hosts.
-        selected = []
-        fast = []
-        full = []
-        clients = []
-
         hosts = self.manager.hosts()
 
         Print.info(str({region: len(ips) for (region, ips) in hosts.items()}))
 
-        for config in bench_parameters.nodes:
-            run_hosts = []
-            run_fast = []
-            run_full = []
-            run_clients = []
-            for region, number in config.items():
-                num_fast = bench_parameters.fast_brokers[0].get(region, 0)
-                num_full = bench_parameters.full_brokers[0].get(region, 0)
-                num_clients = bench_parameters.full_clients[0].get(region, 0)
+        validators = []
+        brokers = []
+        clients = []
 
-                if region in hosts:
-                    ips = hosts[region]
-                    if len(ips) >= number + num_fast + num_full + num_clients:
-                        run_hosts += ips[:number]
-                        run_fast += ips[number:number+num_fast]
-                        run_full += ips[number+num_fast:number+num_fast+num_full]
-                        run_clients += ips[number+num_fast+num_full:number+num_fast+num_full+num_clients]
-                    else:
-                        Print.warn('Only ' + str(len(ips)) + ' out of ' + str(number) +\
-                             '+' + str(num_fast) + '+' + str(num_full) + '+' + str(num_clients) \
-                                 + ' (replicas + fast + full + clients) instances available in region \'' + region + "\'")
-                        return ([], [])
+        regions = set(bench_parameters.validators.keys())
+        colocated = bench_parameters.colocated_brokers
+        if not colocated:
+            regions |= set(bench_parameters.brokers.keys())
+        for region in regions:
+            if region not in hosts.keys():
+                raise BenchError('Bad launch configuration: Region \'' + region + '\' is not included in the list of hosts (check settings.json)')
+
+        for region in regions:
+            num_validators = bench_parameters.validators.get(region, 0)
+
+            num_brokers = 0
+            if not colocated:
+                num_brokers = bench_parameters.brokers.get(region, 0)
+
+            num_clients = num_brokers
+            if colocated:
+                num_clients = num_validators
+
+            ips = hosts[region]
+            if len(ips) >= num_validators + num_brokers + num_clients:
+                validators += ips[:num_validators]
+
+                if colocated:
+                    brokers += ips[:num_validators]
                 else:
-                    Print.warn('Region \'' + region + "\' is not included in the list of hosts (check settings.json)")
-                    return ([], [])
-            selected.append(run_hosts)
-            fast.append(run_fast)
-            full.append(run_full)
-            clients.append(run_clients)
+                    brokers += ips[num_validators:num_validators+num_brokers]
+
+                clients += ips[num_validators+num_brokers:num_validators+num_brokers+num_clients]
+            else:
+                Print.warn('Only ' + str(len(ips)) + ' out of ' + str(num_validators) +\
+                        '+' + str(num_brokers) + '+' + str(num_clients) \
+                            + ' (validators + separate brokers + clients) instances available in region \'' + region + "\'")
+                return
             
-        return (selected, fast, full, clients)
+        return (validators, brokers, clients)
 
     def _background_run(self, host, command, log_file):
         name = splitext(basename(log_file))[0]
@@ -204,37 +207,25 @@ class Bench:
 
         return
 
-    def _run_single(self, hosts, fast_brokers, full_brokers, clients, rate, debug=False):
+    def _run_single(self, validators, brokers, clients, rate, duration, debug=False):
         Print.info('Booting testbed...')
 
         # Kill any potentially unfinished run and delete logs.
-        self.kill(hosts=hosts + fast_brokers + full_brokers + clients, delete_logs=True)
+        self.kill(hosts=validators + brokers + clients, delete_logs=True)
 
         Print.info('Starting rendezvous server...')
 
         # Run the rendezvous server
-        num_nodes = len(hosts)
-        num_fast = len(fast_brokers)
-        num_full = len(full_brokers)
+        num_validators = len(validators)
+        num_brokers = len(brokers)
         num_clients = len(clients)
-        self._start_rendezvous(hosts[0], num_nodes, num_fast, num_full, num_clients)
+        self._start_rendezvous(validators[0], num_validators, num_brokers, num_clients)
 
-        rendezvous_server = hosts[0] + ":9000"
+        rendezvous_server = validators[0] + ":9000"
 
         Print.info('Rendezvous server: ' + rendezvous_server)
 
-        Print.info('Starting the nodes...')
-
-        # Run the nodes.
-        # node_logs = [PathMaker.node_log_file(i) for i in range(len(hosts))]
-        # for host, log_file in zip(hosts, node_logs):
-        #     cmd = CommandMaker.run_node(
-        #         rendezvous = rendezvous_server,
-        #         discovery = rendezvous_server,
-        #         parameters = PathMaker.parameters_file(),
-        #         debug=debug
-        #     )
-        #     self._background_run(host, cmd, log_file)
+        Print.info('Starting the validators...')
 
         log_file = PathMaker.node_log_file(0)
         cmd = CommandMaker.run_node(
@@ -243,36 +234,16 @@ class Bench:
                 parameters = PathMaker.parameters_file(),
                 debug=debug
             )
-        self._background_run_multiple(hosts, cmd, log_file)
+        self._background_run_multiple(validators, cmd, log_file)
 
         # Wait for the nodes to synchronize
         Print.info('Waiting for the nodes to synchronize...')
         sleep(10)
         Print.info('Starting the broker(s)...')
 
-        # Run the fast brokers
-        # fast_broker_logs = [PathMaker.fast_broker_log_file(i) for i in range(len(fast_brokers))]
-        # for broker, log_file in zip(fast_brokers, fast_broker_logs):
-        #     cmd = CommandMaker.run_broker(
-        #         rendezvous = rendezvous_server,
-        #         parameters = PathMaker.parameters_file(),
-        #         rate = rate,
-        #         debug=debug
-        #     )
-        #     self._background_run(broker, cmd, log_file)
-
-        log_file = PathMaker.fast_broker_log_file(0)
-        cmd = CommandMaker.run_broker(
-                rendezvous = rendezvous_server,
-                parameters = PathMaker.parameters_file(),
-                rate = rate,
-                debug=debug
-            )
-        self._background_run_multiple(fast_brokers, cmd, log_file)
-
         # Run the full brokers
-        full_broker_logs = [PathMaker.full_broker_log_file(i) for i in range(len(full_brokers))]
-        for broker, log_file in zip(full_brokers, full_broker_logs):
+        broker_logs = [PathMaker.full_broker_log_file(i) for i in range(len(brokers))]
+        for broker, log_file in zip(brokers, broker_logs):
             cmd = CommandMaker.run_broker(
                 rendezvous = rendezvous_server,
                 parameters = PathMaker.parameters_file(),
@@ -301,7 +272,7 @@ class Bench:
 
         Print.info('Broker(s) expected to have finished signup.')
 
-        sleep_time = 600
+        sleep_time = 200
         interval = sleep_time / 20
         progress = progress_bar([interval] * 20, prefix='Waiting for the broker(s) to finish prepare. Sleeping...')
         for i in progress:
@@ -309,33 +280,24 @@ class Bench:
 
         Print.info('Killing nodes...')
 
-        self.kill(hosts=hosts + fast_brokers + full_brokers + clients, delete_logs=False)
+        self.kill(hosts=validators + brokers + clients, delete_logs=False)
 
-    def _logs(self, hosts, fast_brokers, full_brokers, clients, faults):
+    def _logs(self, validators, brokers, clients):
         # Delete local logs (if any).
         cmd = CommandMaker.clean_logs()
         subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
 
         Print.info('Getting rendezvous log...')
 
-        c = Connection(hosts[0], user='ubuntu', connect_kwargs=self.connect)
+        c = Connection(validators[0], user='ubuntu', connect_kwargs=self.connect)
         c.get(PathMaker.rendezvous_log_file(), local=PathMaker.rendezvous_log_file())
 
-        # Download fast broker log files.
-        if fast_brokers:
-            progress = progress_bar(fast_brokers, prefix='Downloading fast broker logs:')
-            for (i, fast_broker) in enumerate(progress):
+        # Download broker log files.
+        if brokers:
+            progress = progress_bar(brokers, prefix='Downloading broker logs:')
+            for (i, broker) in enumerate(progress):
                 cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
-                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + fast_broker + ':' \
-                         + PathMaker.fast_broker_log_file(0) + " " + PathMaker.fast_broker_log_file(i) + " & "
-                subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
-
-        # Download full broker log files.
-        if full_brokers:
-            progress = progress_bar(full_brokers, prefix='Downloading fast broker logs:')
-            for (i, full_broker) in enumerate(progress):
-                cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
-                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + full_broker + ':' \
+                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + broker + ':' \
                          + PathMaker.full_broker_log_file(0) + " " + PathMaker.full_broker_log_file(i) + " & "
                 subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
 
@@ -346,8 +308,8 @@ class Bench:
                 c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
                 c.get(PathMaker.client_log_file(i), local=PathMaker.client_log_file(i))
 
-        # Download replica log files.
-        progress = progress_bar(hosts, prefix='Downloading fast broker logs:')
+        # Download validator log files.
+        progress = progress_bar(validators, prefix='Downloading validator logs:')
         for (i, host) in enumerate(progress):
             cmd = 'scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\
                     -i ' + self.manager.settings.key_path + ' -C ubuntu@' + host + ':' \
@@ -359,10 +321,10 @@ class Bench:
         # Parse logs and return the parser.
         Print.info('All logs downloaded!')
 
-        return LogParser.process(PathMaker.logs_path(), faults=faults)
+        return LogParser.process(PathMaker.logs_path())
 
-    def _start_rendezvous(self, host, num_nodes, num_fast, num_full, num_clients):
-        cmd = CommandMaker.run_rendezvous(num_nodes, num_fast, num_full, num_clients)
+    def _start_rendezvous(self, host, num_validators, num_brokers, num_clients):
+        cmd = CommandMaker.run_rendezvous(num_validators, num_brokers, num_clients)
         log_file = PathMaker.rendezvous_log_file()
 
         self._background_run(host, cmd, log_file)
@@ -378,28 +340,12 @@ class Bench:
             raise BenchError('Invalid nodes or bench parameters', e)
 
         # Select which hosts to use.
-        (selected_hosts, selected_fast, selected_full, selected_clients) = self._select_hosts(bench_parameters)
-        if not selected_hosts:
+        (validators, brokers, clients) = self._select_hosts(bench_parameters)
+        if not validators:
             return
-
-        # Run benchmarks.
-        n = sum(bench_parameters.nodes[0].values())
-        hosts = selected_hosts[0]
-
-        bfast = sum(bench_parameters.fast_brokers[0].values())
-        fast = selected_fast[0]
-
-        bfull = sum(bench_parameters.full_brokers[0].values())
-        full = selected_full[0]
-
-        b_clients = sum(bench_parameters.full_clients[0].values())
-        clients = selected_clients[0]
-
-        # Do not boot faulty nodes.
-        faults = bench_parameters.faults
         
-        self._logs(hosts, fast, full, clients, faults).print(PathMaker.result_file(
-            n, bfast + bfull, b_clients, faults
+        self._logs(validators, brokers, clients).print(PathMaker.result_file(
+            len(validators), len(brokers), len(clients), 0
         ))
             
 
@@ -413,76 +359,55 @@ class Bench:
             raise BenchError('Invalid nodes or bench parameters', e)
 
         # Select which hosts to use.
-        (selected_hosts, selected_fast, selected_full, selected_clients) = self._select_hosts(bench_parameters)
-        if not selected_hosts:
+        (validators, brokers, clients) = self._select_hosts(bench_parameters)
+        if not validators:
             return
     
-        Print.heading('selected_full: ' + str(selected_full))
+        Print.heading('Validators: ' + str(validators))
+        Print.heading('Brokers: ' + str(brokers))
+        Print.heading('Clients: ' + str(clients))
 
-        merged_hosts = list(set.union(*[set(x) for x in selected_hosts]))
-        merged_fast = list(set.union(*[set(x) for x in selected_fast]))
-        merged_full = list(set.union(*[set(x) for x in selected_full]))
-        merged_clients = list(set.union(*[set(x) for x in selected_clients]))
-
-        Print.heading('Merged hosts: ' + str(merged_hosts))
-        Print.heading('Merged fast brokers: ' + str(merged_fast))
-        Print.heading('Merged full brokers: ' + str(merged_full))
-        Print.heading('Merged clients: ' + str(merged_clients))
+        hosts = validators + clients
+        if not bench_parameters.colocated_brokers:
+            hosts += brokers
 
         # Update nodes.
         try:
-            pass
-            self._update(merged_hosts + merged_fast + merged_full + merged_clients)
+            self._update(hosts)
         except (GroupException, ExecutionError) as e:
             e = FabricError(e) if isinstance(e, GroupException) else e
             raise BenchError('Failed to update nodes', e)
 
         # Run benchmarks.
-        for i, nodes in enumerate(bench_parameters.nodes):
-            n = sum(nodes.values())
-            Print.heading(f'\nRunning {n} nodes')
-            hosts = selected_hosts[i]
+        Print.heading(f'\nRunning {len(validators)} node(s)')
+        Print.heading(f'\nRunning {len(brokers)} (non-colocated) broker(s)')
+        Print.heading(f'\nRunning {len(clients)} client(s)')
 
-            bfast = sum(bench_parameters.fast_brokers[0].values())
-            Print.heading(f'\nRunning {bfast} fast broker(s)')
-            fast = selected_fast[i]
+        rate = bench_parameters.rate
+        duration = bench_parameters.duration
 
-            bfull = sum(bench_parameters.full_brokers[0].values())
-            Print.heading(f'\nRunning {bfull} full broker(s)')
-            full = selected_full[i]
+        # Upload all configuration files.
+        try:
+            pass
+            self._config(hosts, node_parameters)
+        except (subprocess.SubprocessError, GroupException) as e:
+            e = FabricError(e) if isinstance(e, GroupException) else e
+            Print.error(BenchError('Failed to configure nodes', e))
+            return
 
-            b_clients = sum(bench_parameters.full_clients[0].values())
-            Print.heading(f'\nRunning {b_clients} client(s)')
-            clients = selected_clients[i]
-
-            rate = bench_parameters.rate
-
-            # Upload all configuration files.
+        # Run the benchmark.
+        for i in range(bench_parameters.runs):
+            Print.heading(f'Run {i+1}/{bench_parameters.runs}')
             try:
-                pass
-                self._config(hosts + fast + full + clients, node_parameters)
-            except (subprocess.SubprocessError, GroupException) as e:
-                e = FabricError(e) if isinstance(e, GroupException) else e
-                Print.error(BenchError('Failed to configure nodes', e))
+                self._run_single(
+                    validators, brokers, clients, rate, duration, debug
+                )
+                self._logs(hosts, fast, full, clients, faults).print(PathMaker.result_file(
+                    n, bfast + bfull, b_clients, faults
+                ))
+            except (subprocess.SubprocessError, GroupException, ParseError) as e:
+                self.kill(hosts=hosts + fast + full + clients)
+                if isinstance(e, GroupException):
+                    e = FabricError(e)
+                Print.error(BenchError('Benchmark failed', e))
                 continue
-
-            # Do not boot faulty nodes.
-            faults = bench_parameters.faults
-            hosts = hosts[:n-faults]
-
-            # Run the benchmark.
-            for i in range(bench_parameters.runs):
-                Print.heading(f'Run {i+1}/{bench_parameters.runs}')
-                try:
-                    self._run_single(
-                        hosts, fast, full, clients, rate, debug
-                    )
-                    self._logs(hosts, fast, full, clients, faults).print(PathMaker.result_file(
-                        n, bfast + bfull, b_clients, faults
-                    ))
-                except (subprocess.SubprocessError, GroupException, ParseError) as e:
-                    self.kill(hosts=hosts + fast + full + clients)
-                    if isinstance(e, GroupException):
-                        e = FabricError(e)
-                    Print.error(BenchError('Benchmark failed', e))
-                    continue

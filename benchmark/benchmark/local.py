@@ -23,10 +23,9 @@ def _load_repo_settings(filename):
 class LocalBench:
     def __init__(self, bench_parameters_dict, node_parameters_dict, settings_file='settings.json'):
         try:
-            self.nodes = bench_parameters_dict['nodes']
-            self.fast_brokers = bench_parameters_dict['fast_brokers']
-            self.full_brokers = bench_parameters_dict['full_brokers']
-            self.full_clients = bench_parameters_dict['full_clients']
+            self.validators = bench_parameters_dict['validators']
+            self.brokers = bench_parameters_dict['brokers']
+            self.clients = bench_parameters_dict['clients']
             self.rate = bench_parameters_dict['rate']
             self.duration = bench_parameters_dict['duration']
 
@@ -50,8 +49,8 @@ class LocalBench:
         except subprocess.SubprocessError as e:
             raise BenchError('Failed to kill testbed', e)
 
-    def _start_rendezvous(self, num_nodes, num_fast, num_full, num_clients):
-        cmd = CommandMaker.run_rendezvous(num_nodes, num_fast, num_full, num_clients, local="true")
+    def _start_rendezvous(self, num_validators, num_brokers, num_clients):
+        cmd = CommandMaker.run_rendezvous(num_validators, num_brokers, num_clients, local="true")
         log_file = PathMaker.rendezvous_log_file()
 
         self._background_run(cmd, log_file)
@@ -62,16 +61,7 @@ class LocalBench:
         return LogParser.process(join('repo', PathMaker.logs_path()))
 
     def _benchmark_done(self):
-        return (self.full_clients == 0 or self._clients_done()) and (self.fast_brokers == 0 or self._fast_brokers_done())
-
-    
-    def _fast_brokers_done(self):
-        logs = []
-        for filename in sorted(glob(join("repo", "logs", 'fast-broker-*.log'))):
-            with open(filename, 'r') as f:
-                logs += [f.read()]
-
-        return len(logs) != 0 and all([search(r'All transactions completed!', log) is not None for log in logs])
+        return self.clients == 0 or self._clients_done()
 
     def _clients_done(self):
         logs = []
@@ -118,10 +108,9 @@ class LocalBench:
 
             # Run the rendezvous server
             cmd = self._start_rendezvous(
-                self.nodes,
-                self.fast_brokers, 
-                self.full_brokers,
-                self.full_clients,
+                self.validators,
+                self.brokers,
+                self.clients,
             )
 
             rendezvous_server = "127.0.0.1:9000"
@@ -129,7 +118,7 @@ class LocalBench:
             Print.info('Starting servers...')
 
             # Run the nodes.
-            node_logs = [PathMaker.node_log_file(i) for i in range(self.nodes)]
+            node_logs = [PathMaker.node_log_file(i) for i in range(self.validators)]
             for log_file in node_logs:
                 cmd = CommandMaker.run_node(
                     rendezvous = rendezvous_server,
@@ -142,23 +131,9 @@ class LocalBench:
             if self.fast_brokers > 0:
                 Print.info('Starting fast brokers...')
 
-            # Run the fast brokers
-            fast_broker_logs = [PathMaker.fast_broker_log_file(i) for i in range(self.fast_brokers)]
-            for log_file in fast_broker_logs:
-                cmd = CommandMaker.run_broker(
-                    rendezvous = rendezvous_server,
-                    parameters = PathMaker.parameters_file(),
-                    rate = self.rate,
-                    debug=debug
-                )
-                self._background_run(cmd, log_file)
-
-            if self.full_brokers > 0:
-                Print.info('Starting full brokers...')
-
             # Run the full brokers
-            full_broker_logs = [PathMaker.full_broker_log_file(i) for i in range(self.full_brokers)]
-            for log_file in full_broker_logs:
+            broker_logs = [PathMaker.full_broker_log_file(i) for i in range(self.brokers)]
+            for log_file in broker_logs:
                 cmd = CommandMaker.run_broker(
                     rendezvous = rendezvous_server,
                     parameters = PathMaker.parameters_file(),
@@ -168,16 +143,16 @@ class LocalBench:
                 )
                 self._background_run(cmd, log_file)
 
-            if self.full_clients > 0:
+            if self.clients > 0:
                 Print.info('Starting full clients...')
 
             # Run the clients 
-            client_logs = [PathMaker.client_log_file(i) for i in range(self.full_clients)]
+            client_logs = [PathMaker.client_log_file(i) for i in range(self.clients)]
             for log_file in client_logs:
                 cmd = CommandMaker.run_client(
                     rendezvous = rendezvous_server,
                     parameters = PathMaker.parameters_file(),
-                    num_clients = self.full_clients,
+                    num_clients = self.clients,
                     debug=debug
                 )
                 self._background_run(cmd, log_file)

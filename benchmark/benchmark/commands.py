@@ -56,12 +56,11 @@ class CommandMaker:
                 f' --parameters {parameters} --num_clients {num_clients}')
 
     @staticmethod
-    def run_rendezvous(num_nodes, num_fast, num_full, num_clients, local=False):
-        assert isinstance(num_nodes, int)
-        assert isinstance(num_fast, int)
-        assert isinstance(num_full, int)
+    def run_rendezvous(num_validators, num_brokers, num_clients, local=False):
+        assert isinstance(num_validators, int)
+        assert isinstance(num_brokers, int)
         assert isinstance(num_clients, int)
-        return f'./rendezvous -vv run --size {num_nodes} --fast_brokers {num_fast} --full_brokers {num_full} --num_clients {num_clients} --local {local}'
+        return f'./rendezvous -vv run --size {num_validators} --num_brokers {num_brokers} --num_clients {num_clients} --local {local}'
 
     @staticmethod
     def kill():

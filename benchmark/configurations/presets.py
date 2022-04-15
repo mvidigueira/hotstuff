@@ -21,8 +21,9 @@ config_1_brokers = {
 }
 
 remote_bench_parameters = {
-    'nodes': config_1_nodes,
-    'full_brokers': config_1_brokers,
+    'validators': config_1_nodes,
+    'brokers': config_1_brokers,
+    'broker_colocation': False,
     'rate': 1_000_000,
     'duration': 120,
     'runs': 1,

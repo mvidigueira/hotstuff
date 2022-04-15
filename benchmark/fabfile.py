@@ -14,10 +14,9 @@ from aws.remote import Bench, BenchError
 def local(ctx):
     ''' Run benchmarks on localhost '''
     bench_params = {
-        'nodes': 4,
-        'fast_brokers': 0,
-        'full_brokers': 1,
-        'full_clients': 2,
+        'validators': 4,
+        'brokers': 1,
+        'clients': 2,
         'rate': 1_000_000,
         'duration': 600,
         'runs': 1,
@@ -68,7 +67,7 @@ def destroy(ctx):
 
 
 @task
-def start(ctx, max = 8):
+def start(ctx, max = 40):
     ''' Start at most `max` machines per data center '''
     try:
         InstanceManager.make().start_instances(max)

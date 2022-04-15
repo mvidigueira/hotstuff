@@ -32,52 +32,24 @@ class NodeParameters:
 class BenchParameters:
     def __init__(self, json):
         try:
-            nodes = json['nodes'] 
-            nodes = nodes if isinstance(nodes, list) else [nodes]
+            validators = json['validators']
+            assert isinstance(validators, dict)
 
-            if not nodes or any(any(y < 1 for y in x.values()) for x in nodes):
-                raise ConfigError('Missing or invalid number of nodes')
+            if not validators or any(not isinstance(x, int) or x < 1 for x in validators.values()):
+                raise ConfigError('Missing or invalid number of validators')
 
-            self.nodes = [{y: int(x[y]) for y in x} for x in nodes]
+            self.validators = validators
 
-            fast_brokers = json['fast_brokers'] 
-            fast_brokers = fast_brokers if isinstance(fast_brokers, list) else [fast_brokers]
-
-            if not fast_brokers:
-                self.fast_brokers = [dict()]
+            colocated_brokers = json['broker_colocation']
+            if colocated_brokers:
+                self.colocated_brokers = True
             else:
-                if any(any(y < 1 for y in x.values()) for x in fast_brokers):
-                    raise ConfigError('Missing or invalid number of fast_brokers')
-                self.fast_brokers = [{y: int(x[y]) for y in x} for x in fast_brokers]
-
-            if len(self.fast_brokers) != 1:
-                raise ConfigError('The number of fast brokers cannot change between runs')
-
-            full_brokers = json['full_brokers'] 
-            full_brokers = full_brokers if isinstance(full_brokers, list) else [full_brokers]
-
-            if not full_brokers:
-                self.full_brokers = [dict()]
-            else:
-                if any(any(y < 1 for y in x.values()) for x in full_brokers):
-                    raise ConfigError('Missing or invalid number of full_brokers')
-                self.full_brokers = [{y: int(x[y]) for y in x} for x in full_brokers]
-
-            if len(self.full_brokers) != 1:
-                raise ConfigError('The number of full brokers cannot change between runs')
-
-            full_clients = json['full_clients'] 
-            full_clients = full_clients if isinstance(full_clients, list) else [full_clients]
-
-            if not full_clients:
-                self.full_clients = [dict()]
-            else:
-                if any(any(y < 1 for y in x.values()) for x in full_clients):
-                    raise ConfigError('Missing or invalid number of full_brokers')
-                self.full_clients = [{y: int(x[y]) for y in x} for x in full_clients]
-
-            if len(self.full_clients) != 1:
-                raise ConfigError('The number of full brokers cannot change between runs')
+                self.colocated_brokers = False
+                brokers = json['brokers']
+                assert isinstance(brokers, dict)
+                if not brokers or any(not isinstance(x, int) or x < 1 for x in validators.values()):
+                    raise ConfigError('Missing or invalid number of brokers')
+                self.brokers = brokers
 
             self.rate = int(json['rate'])
             self.duration = int(json['duration'])
@@ -92,16 +64,16 @@ class BenchParameters:
 class PlotParameters:
     def __init__(self, json):
         try:
-            nodes = json['nodes'] 
-            nodes = nodes if isinstance(nodes, list) else [nodes]
-            if not nodes:
-                raise ConfigError('Missing number of nodes')
-            self.nodes = [int(x) for x in nodes]
+            validators = json['validators'] 
+            validators = validators if isinstance(validators, list) else [validators]
+            if not validators:
+                raise ConfigError('Missing number of validators')
+            self.validators = [int(x) for x in validators]
 
             brokers = json['brokers'] 
             brokers = brokers if isinstance(brokers, list) else [brokers]
             if not brokers:
-                raise ConfigError('Missing number of nodes')
+                raise ConfigError('Missing number of validators')
             self.brokers = [int(x) for x in brokers]
 
             faults = json['faults'] 
